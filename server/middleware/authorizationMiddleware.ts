@@ -174,8 +174,25 @@ export function requireOrganization(organizationParam: 'body' | 'params' | 'quer
         return;
       }
 
-      // Check if user has access to this organization
-      const hasAccess = await storage.hasOrgMembership(userId, organizationId);
+      // Check if user has access to this organization with error handling
+      let hasAccess: boolean;
+      let membership: any;
+      try {
+        hasAccess = await storage.hasOrgMembership(userId, organizationId);
+        if (hasAccess) {
+          membership = await storage.getUserOrgMembership(userId, organizationId);
+        }
+      } catch (error) {
+        console.error(`[AUTH] Storage error checking org access for user ${userId} in org ${organizationId}:`, error);
+        // Fail closed - deny access on storage errors
+        res.status(403).json({
+          error: "Authorization Error",
+          message: "Unable to verify organization access",
+          code: "ORG_AUTHORIZATION_ERROR",
+          organizationId
+        });
+        return;
+      }
       
       if (!hasAccess) {
         res.status(403).json({
@@ -186,9 +203,6 @@ export function requireOrganization(organizationParam: 'body' | 'params' | 'quer
         });
         return;
       }
-
-      // Get user's org membership for role context
-      const membership = await storage.getUserOrgMembership(userId, organizationId);
       
       // Add organization context to request
       req.organizationId = organizationId;
@@ -196,11 +210,12 @@ export function requireOrganization(organizationParam: 'body' | 'params' | 'quer
       
       next();
     } catch (error) {
-      console.error("Organization authorization error:", error);
-      res.status(500).json({
+      console.error("[AUTH] Unexpected organization authorization error:", error);
+      // Fail closed - deny access on unexpected errors
+      res.status(403).json({
         error: "Authorization Error",
-        message: "Failed to verify organization access",
-        code: "ORG_AUTH_ERROR"
+        message: "Organization authorization system error",
+        code: "ORG_AUTHORIZATION_SYSTEM_ERROR"
       });
     }
   };
@@ -232,8 +247,21 @@ export function requirePermissions(...permissions: string[]) {
         return;
       }
 
-      // Get user permissions from storage-backed authorization
-      const userPermissions = await storage.getUserPermissions(userId, organizationId);
+      // Get user permissions from storage-backed authorization with error handling
+      let userPermissions: string[];
+      try {
+        userPermissions = await storage.getUserPermissions(userId, organizationId);
+      } catch (error) {
+        console.error(`[AUTH] Storage error getting permissions for user ${userId} in org ${organizationId}:`, error);
+        // Fail closed - deny access on storage errors
+        res.status(403).json({
+          error: "Authorization Error",
+          message: "Unable to verify permissions",
+          code: "AUTHORIZATION_ERROR",
+          organizationId
+        });
+        return;
+      }
       
       // Check if user has all required permissions
       const hasAllPermissions = permissions.every(permission => 
@@ -247,11 +275,9 @@ export function requirePermissions(...permissions: string[]) {
         
         res.status(403).json({
           error: "Permission Denied",
-          message: "You do not have the required permissions to perform this action",
+          message: "Insufficient permissions to access this resource",
           code: "PERMISSION_DENIED",
-          requiredPermissions: permissions,
-          missingPermissions,
-          userPermissions: userPermissions // Remove in production for security
+          organizationId
         });
         return;
       }
@@ -261,11 +287,12 @@ export function requirePermissions(...permissions: string[]) {
       
       next();
     } catch (error) {
-      console.error("Permission authorization error:", error);
-      res.status(500).json({
-        error: "Authorization Error", 
-        message: "Failed to verify permissions",
-        code: "PERMISSION_AUTH_ERROR"
+      console.error("[AUTH] Unexpected permission authorization error:", error);
+      // Fail closed - deny access on unexpected errors
+      res.status(403).json({
+        error: "Authorization Error",
+        message: "Authorization system error",
+        code: "AUTHORIZATION_SYSTEM_ERROR"
       });
     }
   };

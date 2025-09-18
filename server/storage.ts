@@ -85,8 +85,10 @@ export class MemStorage implements IStorage {
     this.organizations = new Map();
     this.orgMemberships = new Map();
     
-    // Initialize with a default organization for testing
-    this.initializeDefaultData();
+    // Initialize with a default organization for development only
+    if (process.env.NODE_ENV === 'development') {
+      this.initializeDefaultData();
+    }
   }
 
   private initializeDefaultData() {
