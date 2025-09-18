@@ -22,12 +22,13 @@ The project includes a significant user interface with React/TypeScript frontend
 | Date | Version | Description | Author |
 |------|---------|-------------|---------|
 | 2025-09-18 | 1.0 | Initial Architecture Document | Winston (Architect) |
+| 2025-09-18 | 2.0 | **MAJOR REVISION**: Complete architecture redesign to support Natural Language Business Application Generator with Embedded AI Chatbots. Added NLP Engine, AI Application Generation Engine, Embedded AI Chatbot Framework, Business Process Automation Engine, Template Generation System, and WebSocket-based real-time AI assistance. | Winston (Architect) |
 
 ## High Level Architecture
 
 ### Technical Summary
 
-The Enterprise AI Application Platform employs a **monolithic full-stack architecture** with thin backend pattern optimized for rapid development and <15 minute deployment capabilities. The system uses React/TypeScript for frontend-heavy business logic, Express.js as a minimal API layer, and MemStorage for MVP persistence with clear PostgreSQL migration path. Core architectural patterns include Repository Pattern for data abstraction, AI Service Layer for multi-model integration, and Progressive Web App patterns for enterprise user experience. This architecture directly supports PRD goals of 90% development acceleration, <200ms API response times, and Fortune 500 enterprise adoption through a scalable, secure foundation.
+The Enterprise AI Application Platform employs a **Natural Language Business Application Generation architecture** with embedded AI chatbot framework optimized for complete business system generation in <15 minutes. The system uses a multi-layered AI architecture: Natural Language Processing Engine for requirement extraction, AI Application Generation Engine for creating workflows/forms/integrations, and Embedded AI Chatbot Framework for intelligent assistance within generated applications. Core architectural patterns include NLP Pipeline Pattern for business description parsing, Application Generation Service Pattern for complete system creation, and Embedded Intelligence Pattern for AI chatbots within generated apps. This architecture directly supports PRD goals of natural language input to complete business applications with embedded AI assistance, <200ms API response times, and Fortune 500 enterprise adoption.
 
 ### High Level Overview
 
@@ -35,71 +36,91 @@ The Enterprise AI Application Platform employs a **monolithic full-stack archite
 
 **2. Repository Structure**: Single-service monorepo with clear frontend/backend separation
 
-**3. Service Architecture**: Unified full-stack application with the following layers:
-   - **Presentation Layer**: React/TypeScript with Shadcn UI components
-   - **Business Logic Layer**: Frontend-heavy with React state management
-   - **API Layer**: Thin Express.js backend for data persistence and AI orchestration
-   - **Data Layer**: MemStorage for MVP, PostgreSQL migration path for enterprise scaling
-   - **Integration Layer**: Replit Auth, OpenAI API, WebSocket for real-time features
+**3. Service Architecture**: Natural Language Business Application Generator with the following layers:
+   - **Natural Language Processing Layer**: Business description parsing and requirement extraction
+   - **AI Application Generation Layer**: Complete business system creation (workflows, forms, integrations, embedded AI chatbots)
+   - **Embedded AI Chatbot Layer**: Intelligent assistants within generated applications
+   - **Business Process Automation Layer**: Workflow execution, approval routing, AI-powered validation
+   - **Template Generation Layer**: Convert applications into reusable templates with embedded AI
+   - **Real-time AI Assistance Layer**: WebSocket-based intelligent guidance within generated applications
 
 **4. Primary User Flow**: 
-   - User authentication via Replit Auth → Role-based progressive onboarding → Industry template discovery → AI-assisted configuration → Visual workflow building → Zero-shot application deployment
+   - User authentication → Natural language business description ("Create employee onboarding with background checks") → NLP Engine requirement extraction → AI Application Generation (workflows, forms, integrations, embedded chatbots) → Complete business system deployment with intelligent AI assistance → Template creation for reuse
 
 **5. Key Architectural Decisions**:
-   - **Frontend-Heavy Architecture**: Business logic in React to minimize backend complexity and API calls
-   - **MemStorage for MVP**: Non-durable in-memory persistence acceptable for demos with clear migration path
-   - **Multi-Model AI Integration**: OpenAI primary with streaming capabilities for real-time chat
-   - **Progressive Onboarding**: Role-based paths (Business/Technical) to eliminate feature overwhelm
+   - **Natural Language First Architecture**: All application generation starts from business descriptions
+   - **Embedded AI Chatbot Pattern**: Every generated application includes intelligent AI assistants
+   - **Complete System Generation**: Generate workflows, forms, integrations, and AI chatbots as unified systems
+   - **Real-time AI Assistance**: WebSocket-based intelligent guidance within generated applications
+   - **Template Generation from Applications**: Convert successful applications into reusable templates with embedded AI
 
 ### High Level Project Diagram
 
 ```mermaid
 graph TB
-    User[👤 User] --> Auth[🔐 Replit Auth]
-    User --> Frontend[🌐 React Frontend]
+    User[👤 Business User] --> NLInput["📝 Natural Language Input<br/>('Create employee onboarding')"]
     
-    Frontend --> API[⚡ Express API]
-    Frontend --> WebSocket[🔄 WebSocket Server]
-    Frontend --> Storage[💾 Browser Storage]
+    NLInput --> NLPEngine[🧠 NLP Engine]
+    NLPEngine --> Requirements[📋 Structured Requirements]
     
-    API --> MemStore[(📝 MemStorage)]
-    API --> AI[🤖 AI Service Layer]
+    Requirements --> AppGenEngine[⚙️ AI Application Generation Engine]
+    AppGenEngine --> WorkflowGen[📊 Workflow Generation]
+    AppGenEngine --> FormGen[📋 Dynamic Form Creation]
+    AppGenEngine --> IntegrationGen[🔗 Integration Generation]
+    AppGenEngine --> ChatbotGen[🤖 Embedded AI Chatbot Creation]
     
-    AI --> OpenAI[🧠 OpenAI GPT-4]
-    AI --> Streaming[📡 Streaming Response]
+    WorkflowGen --> CompleteBizApp[🚀 Complete Business Application]
+    FormGen --> CompleteBizApp
+    IntegrationGen --> CompleteBizApp
+    ChatbotGen --> CompleteBizApp
     
-    WebSocket --> RealTime[⚡ Real-time Updates]
+    CompleteBizApp --> EmbeddedAI[🤖 Embedded AI Chatbots]
+    CompleteBizApp --> ProcessEngine[⚡ Business Process Automation]
+    CompleteBizApp --> TemplateGen[📝 Template Generation]
     
-    MemStore --> Migration[➡️ PostgreSQL Migration Path]
+    EmbeddedAI --> RealTimeAssist[💬 Real-time AI Assistance]
+    ProcessEngine --> WorkflowExecution[🔄 Workflow Execution]
     
-    subgraph "External Integrations"
-        Auth
-        OpenAI
+    subgraph "Natural Language Processing Layer"
+        NLPEngine
+        Requirements
     end
     
-    subgraph "Client Side"
-        User
-        Frontend
-        Storage
+    subgraph "AI Application Generation Layer"
+        AppGenEngine
+        WorkflowGen
+        FormGen
+        IntegrationGen
+        ChatbotGen
     end
     
-    subgraph "Server Side"
-        API
-        WebSocket
-        MemStore
-        AI
-        Streaming
-        RealTime
+    subgraph "Generated Business Applications"
+        CompleteBizApp
+        EmbeddedAI
+        ProcessEngine
+        RealTimeAssist
+        WorkflowExecution
     end
+    
+    subgraph "External AI Services"
+        OpenAI[🧠 OpenAI GPT-4]
+        Claude[🤖 Anthropic Claude]
+    end
+    
+    NLPEngine --> OpenAI
+    AppGenEngine --> OpenAI
+    EmbeddedAI --> OpenAI
+    ChatbotGen --> Claude
 ```
 
 ### Architectural and Design Patterns
 
-- **Monolithic Full-Stack Pattern**: Single deployable unit with clear layer separation - *Rationale:* Maximizes development velocity for MVP and supports <15 minute deployment target
-- **Thin Backend Pattern**: Frontend handles most business logic, backend focuses on persistence and AI integration - *Rationale:* Reduces API calls and latency while enabling complex UI interactions
-- **Repository Pattern**: Abstract data access layer enabling MemStorage → PostgreSQL migration - *Rationale:* Provides testability and future database flexibility without architectural changes
-- **Service Layer Pattern**: AI orchestration service managing OpenAI integration and streaming - *Rationale:* Encapsulates AI complexity and enables multi-model support
-- **Progressive Web App Pattern**: Frontend optimized for enterprise desktop/tablet experiences - *Rationale:* Supports Fortune 500 user requirements and offline capability roadmap
+- **Natural Language Processing Pipeline Pattern**: Multi-stage NLP pipeline for business description to structured requirements - *Rationale:* Enables accurate requirement extraction from plain English descriptions with context preservation
+- **AI Application Generation Service Pattern**: Orchestrated AI services for complete business system creation - *Rationale:* Generates workflows, forms, integrations, and embedded AI chatbots as unified applications
+- **Embedded Intelligence Pattern**: AI chatbots automatically embedded within generated applications - *Rationale:* Provides intelligent user guidance, form assistance, and process automation within business applications
+- **Business Process Automation Engine Pattern**: Workflow execution with AI-powered routing and validation - *Rationale:* Enables intelligent approval workflows, data validation, and automated business process execution
+- **Template Generation Pattern**: Convert successful applications into reusable templates with embedded AI - *Rationale:* Accelerates future application creation while preserving intelligent assistance capabilities
+- **Real-time AI Assistance Pattern**: WebSocket-based intelligent guidance within generated applications - *Rationale:* Provides contextual help, smart suggestions, and live assistance during business process execution
 
 ## Tech Stack
 
@@ -133,95 +154,373 @@ graph TB
 
 ### User
 
-**Purpose:** Core user entity supporting role-based onboarding and personalized experience
+**Purpose:** Business users who create applications through natural language descriptions
 
 **Key Attributes:**
 - id: string - Unique identifier from Replit Auth
 - email: string - User email address
-- profile: object - User profile information (name, avatar, preferences)
-- role: enum - User role (business_user | technical_user)
-- industry: string - Selected industry (healthcare | finance | ecommerce)
-- onboardingCompleted: boolean - Onboarding completion status
-- preferences: object - User preferences and settings
+- profile: object - User profile information (name, avatar, company)
+- businessRole: string - User's business role (HR Manager, Operations, Finance, etc.)
+- industry: string - User's industry context for AI assistance
+- generatedAppsCount: number - Number of applications created
+- preferences: object - AI assistance preferences and settings
 
 **Relationships:**
-- One-to-many with Templates (saved/favorited templates)
-- One-to-many with Projects (created applications)
-- One-to-many with ChatSessions (AI conversation history)
+- One-to-many with BusinessRequirements (natural language inputs)
+- One-to-many with GeneratedApplications (created applications)
+- One-to-many with AIInteractions (AI conversation history)
 
-### Template
+### BusinessRequirement
 
-**Purpose:** Industry-specific application templates with ratings and ROI metrics
+**Purpose:** Structured representation of natural language business application descriptions
 
 **Key Attributes:**
-- id: string - Unique template identifier
-- name: string - Template display name
-- industry: enum - Target industry (healthcare | finance | ecommerce)
-- description: string - Template description
-- rating: number - Average user rating (1-5 stars)
-- usageCount: number - Number of deployments
-- roiMetrics: object - ROI demonstration data
-- configuration: object - Template configuration schema
-- complianceInfo: array - Compliance certifications
+- id: string - Unique requirement identifier
+- userId: string - User who provided the requirement
+- originalDescription: string - Original natural language input
+- extractedEntities: object - NLP extracted entities (processes, forms, approvals, integrations)
+- workflowPatterns: array - Identified workflow patterns
+- formRequirements: array - Required forms and fields
+- integrationNeeds: array - External service requirements
+- aiAssistancePoints: array - Where embedded AI should provide guidance
+- confidence: number - NLP confidence score for requirement extraction
+- status: enum - (analyzing | validated | generating_app | completed)
+- createdAt: date - Requirement creation timestamp
 
 **Relationships:**
-- Many-to-many with Users (favorites, ratings)
-- One-to-many with Projects (instantiated applications)
-- Many-to-one with TemplateCategory
+- Many-to-one with User (creator)
+- One-to-one with GeneratedApplication (resulting application)
 
-### Project
+### GeneratedApplication
 
-**Purpose:** User-created applications generated from templates or workflows
+**Purpose:** Complete business applications created from natural language descriptions with embedded AI chatbots
 
 **Key Attributes:**
-- id: string - Unique project identifier
-- userId: string - Owner user ID
-- templateId: string - Source template ID (if applicable)
-- name: string - Project name
-- status: enum - Project status (draft | deploying | deployed | error)
-- configuration: object - Project configuration and customizations
+- id: string - Unique application identifier
+- userId: string - Application owner
+- requirementId: string - Source business requirement
+- name: string - Generated application name
+- applicationCode: object - Generated React components, API endpoints, workflows
+- workflows: array - Generated business workflows with routing logic
+- forms: array - Dynamic forms with validation rules
+- integrations: array - External service connections
+- embeddedChatbots: array - AI assistants integrated into the application
+- businessLogic: object - Validation rules, approval criteria, decision logic
 - deploymentUrl: string - Live application URL
-- createdAt: date - Creation timestamp
+- status: enum - (generating | testing | deployed | error)
+- analytics: object - Usage metrics and performance data
+- createdAt: date - Generation timestamp
 
 **Relationships:**
 - Many-to-one with User (owner)
-- Many-to-one with Template (source template)
-- One-to-many with ChatSessions (project-specific AI conversations)
+- One-to-one with BusinessRequirement (source requirement)
+- One-to-many with EmbeddedChatbot (AI assistants)
+- One-to-many with WorkflowExecution (running processes)
+- One-to-one with GeneratedTemplate (if converted to template)
 
-### ChatSession
+### EmbeddedChatbot
 
-**Purpose:** AI conversation history with context preservation
+**Purpose:** AI assistants automatically embedded within generated business applications
 
 **Key Attributes:**
-- id: string - Unique session identifier
-- userId: string - User ID
-- projectId: string - Associated project (optional)
-- messages: array - Conversation message history
-- context: object - Session context and state
-- model: enum - AI model used (gpt-4 | claude)
-- sessionType: enum - Session type (onboarding | template_config | workflow_builder)
+- id: string - Unique chatbot identifier
+- applicationId: string - Parent generated application
+- name: string - Chatbot name (e.g., "Onboarding Assistant")
+- contextualKnowledge: object - Application-specific knowledge and business rules
+- capabilities: array - Available actions (form_help, validation, action_execution, process_guidance)
+- conversationHistory: array - Chat history with application users
+- aiModel: enum - AI model used (gpt-4 | claude-3)
+- personalityConfig: object - Chatbot personality and communication style
+- triggerPoints: array - When chatbot should proactively offer help
+- integrationAccess: array - External services the chatbot can access
+- status: enum - (active | paused | updating)
 
 **Relationships:**
-- Many-to-one with User
-- Many-to-one with Project (optional)
+- Many-to-one with GeneratedApplication (parent application)
+- One-to-many with ChatInteraction (conversations with users)
 
-## Components
+### WorkflowExecution
+
+**Purpose:** Active business process instances running within generated applications
+
+**Key Attributes:**
+- id: string - Unique execution identifier
+- applicationId: string - Parent generated application
+- workflowDefinition: object - Workflow structure and logic
+- currentStep: string - Current workflow step
+- processData: object - Data being processed through workflow
+- approvals: array - Required and completed approvals
+- notifications: array - Sent notifications and their status
+- assignedUsers: array - Users involved in the workflow
+- aiDecisions: array - AI-powered routing and validation decisions
+- status: enum - (running | paused | completed | error)
+- startedAt: date - Workflow start time
+- completedAt: date - Workflow completion time (if completed)
+
+**Relationships:**
+- Many-to-one with GeneratedApplication (parent application)
+- One-to-many with AIInteraction (AI assistance during execution)
+
+### GeneratedTemplate
+
+**Purpose:** Reusable templates created from successful business applications with embedded AI assistance
+
+**Key Attributes:**
+- id: string - Unique template identifier
+- sourceApplicationId: string - Original generated application
+- name: string - Template name
+- description: string - Template description and use cases
+- businessCategory: string - Business function category
+- applicationPattern: object - Abstracted application structure
+- parameterization: object - Configurable parameters for template customization
+- embeddedAITemplate: object - Template for AI assistant creation
+- usageCount: number - Number of times template has been used
+- rating: number - User rating based on successful deployments
+- validationRules: object - Template quality and completeness rules
+- createdAt: date - Template creation timestamp
+
+**Relationships:**
+- One-to-one with GeneratedApplication (source application)
+- One-to-many with GeneratedApplication (applications created from this template)
+
+### AIInteraction
+
+**Purpose:** AI conversation history and context preservation across natural language processing and application generation
+
+**Key Attributes:**
+- id: string - Unique interaction identifier
+- userId: string - User involved in interaction
+- applicationId: string - Associated generated application (if applicable)
+- chatbotId: string - Associated embedded chatbot (if applicable)
+- interactionType: enum - (requirement_gathering | application_generation | embedded_assistance | workflow_guidance)
+- messages: array - Conversation message history with context
+- aiModel: enum - AI model used for interaction
+- context: object - Interaction context and state preservation
+- businessContext: object - Relevant business information for AI understanding
+- actionsTaken: array - Actions executed by AI during interaction
+- satisfactionRating: number - User satisfaction with AI assistance
+- createdAt: date - Interaction start timestamp
+
+**Relationships:**
+- Many-to-one with User (participant)
+- Many-to-one with GeneratedApplication (related application, optional)
+- Many-to-one with EmbeddedChatbot (chatbot involved, optional)
+
+### ChatInteraction
+
+**Purpose:** Real-time chat sessions between users and embedded AI chatbots within generated applications
+
+**Key Attributes:**
+- id: string - Unique chat interaction identifier
+- chatbotId: string - Embedded chatbot providing assistance
+- userId: string - User receiving assistance (can be different from app owner)
+- sessionData: object - Current application session context
+- messages: array - Real-time chat message history
+- assistanceType: enum - (form_completion | process_guidance | error_resolution | general_help)
+- formContext: object - Current form being assisted with (if applicable)
+- workflowContext: object - Current workflow step context (if applicable)
+- actionsExecuted: array - Actions taken by chatbot (form validation, sending emails, etc.)
+- resolutionStatus: enum - (ongoing | resolved | escalated)
+- createdAt: date - Chat session start time
+
+**Relationships:**
+- Many-to-one with EmbeddedChatbot (assistant)
+- Many-to-one with User (user being assisted)
+
+### IntegrationEndpoint
+
+**Purpose:** External service connections automatically created within generated applications
+
+**Key Attributes:**
+- id: string - Unique integration identifier
+- applicationId: string - Parent generated application
+- serviceName: string - External service name (email, SMS, background_check, document_storage)
+- endpointConfig: object - Connection configuration and credentials
+- triggerEvents: array - Application events that trigger this integration
+- dataMapping: object - How application data maps to external service
+- authenticationMethod: enum - (api_key | oauth | webhook)
+- status: enum - (active | inactive | error)
+- usageMetrics: object - Integration usage statistics
+- createdAt: date - Integration creation timestamp
+
+**Relationships:**
+- Many-to-one with GeneratedApplication (parent application)
+- One-to-many with IntegrationExecution (integration usage instances)
+
+### IntegrationExecution
+
+**Purpose:** Log of integration usage and external service interactions
+
+**Key Attributes:**
+- id: string - Unique execution identifier
+- integrationId: string - Parent integration endpoint
+- workflowExecutionId: string - Related workflow execution (if applicable)
+- triggerEvent: string - Event that triggered integration
+- requestData: object - Data sent to external service
+- responseData: object - Response from external service
+- status: enum - (success | error | timeout)
+- executionTime: number - Time taken for integration call
+- errorDetails: string - Error information (if applicable)
+- executedAt: date - Execution timestamp
+
+**Relationships:**
+- Many-to-one with IntegrationEndpoint (parent integration)
+- Many-to-one with WorkflowExecution (related workflow, optional)
+
+## Core Architecture Components
+
+### Natural Language Processing Engine
+
+**Responsibility:** Parse natural language business descriptions into structured application requirements
+
+**Key Capabilities:**
+- **Business Intent Recognition**: Identify application type (onboarding, approval workflow, data collection, etc.)
+- **Entity Extraction**: Extract business entities (employees, documents, approvals, notifications, integrations)
+- **Workflow Pattern Detection**: Recognize common business patterns (sequential approval, parallel review, conditional routing)
+- **Form Field Inference**: Determine required form fields, validation rules, and field types from descriptions
+- **Integration Requirements**: Identify external services needed (email, SMS, background checks, document storage)
+- **AI Assistance Points**: Determine where embedded AI chatbots should provide guidance
+
+**Architecture Pattern:** Multi-Stage NLP Pipeline
+```
+Natural Language Input → Intent Classification → Entity Extraction → Workflow Pattern Matching → Structured Requirements → Validation & Refinement
+```
+
+**Implementation:**
+- **Primary NLP Model**: OpenAI GPT-4 with custom business domain prompting
+- **Fallback Model**: Anthropic Claude for complex requirement parsing
+- **Context Preservation**: Conversation memory for iterative requirement refinement
+- **Validation Layer**: AI-powered requirement completeness checking
+
+**Dependencies:** OpenAI API, Claude API, Requirements Storage
+
+**Technology Stack:** OpenAI SDK 4.28, Custom prompt engineering, Structured output parsing
+
+### AI Application Generation Engine
+
+**Responsibility:** Generate complete business applications including workflows, forms, integrations, and embedded AI chatbots from structured requirements
+
+**Key Capabilities:**
+- **Workflow Generation**: Create multi-step business processes with routing logic, approval chains, and conditional paths
+- **Dynamic Form Creation**: Generate forms with intelligent field types, validation rules, and conditional logic
+- **Integration Generation**: Create API connections, email workflows, SMS notifications, and external service integrations
+- **Embedded AI Chatbot Creation**: Generate intelligent assistants specific to each application with contextual knowledge
+- **Business Logic Generation**: Create validation rules, approval criteria, and automated decision logic
+- **UI Component Generation**: Create application-specific user interfaces with embedded AI assistance
+
+**Architecture Pattern:** Service Orchestration with AI Code Generation
+```
+Structured Requirements → Workflow Generation Service → Form Generation Service → Integration Generation Service → Chatbot Generation Service → Application Assembly → Deployment
+```
+
+**Implementation:**
+- **Code Generation**: AI-powered generation of React components, API endpoints, and database schemas
+- **Workflow Engine**: Dynamic workflow creation with approval routing and process automation
+- **Form Builder**: Intelligent form generation with validation and conditional logic
+- **Integration Factory**: Automated creation of external service connections
+- **Chatbot Factory**: Generation of application-specific AI assistants
+
+**Dependencies:** NLP Engine output, OpenAI API for code generation, Application Template Framework
+
+**Technology Stack:** OpenAI SDK for code generation, React component templates, Express.js API generation, Workflow engine
+
+### Embedded AI Chatbot Framework
+
+**Responsibility:** Create and deploy intelligent AI assistants within generated business applications
+
+**Key Capabilities:**
+- **Contextual Form Assistance**: Help users complete forms with smart suggestions and validation
+- **Process Guidance**: Guide users through multi-step workflows with contextual help
+- **Action Execution**: Execute business actions (send emails, create tasks, update records) on behalf of users
+- **Data Validation**: Intelligent validation of user inputs with explanatory feedback
+- **Smart Suggestions**: Provide intelligent recommendations based on business context
+- **Error Resolution**: Help users resolve errors and complete processes successfully
+
+**Architecture Pattern:** Embedded Intelligence with WebSocket Communication
+```
+Generated Application → Embedded AI Chatbot → WebSocket Connection → AI Service → Business Context → Real-time Assistance
+```
+
+**Implementation:**
+- **Chatbot Embedding**: Automatic integration into generated applications
+- **Context Awareness**: Understanding of specific business process and application state
+- **Real-time Communication**: WebSocket-based streaming responses
+- **Action Framework**: Ability to execute business actions within applications
+- **Memory System**: Conversation history and user interaction context
+
+**Dependencies:** Generated Applications, WebSocket Server, OpenAI API, Business Context Storage
+
+**Technology Stack:** WebSocket (ws), OpenAI SDK for conversational AI, React chatbot components, Context management system
+
+### Business Process Automation Engine
+
+**Responsibility:** Execute workflows, route approvals, validate data, and automate business processes within generated applications
+
+**Key Capabilities:**
+- **Workflow Execution**: Run multi-step business processes with state management
+- **Intelligent Routing**: AI-powered decision making for approval routing and process flow
+- **Automated Validation**: AI-driven data validation with business rule enforcement
+- **Notification System**: Automated email, SMS, and in-app notifications
+- **Escalation Management**: Automatic escalation of stalled processes and overdue approvals
+- **Process Analytics**: Track process completion rates, bottlenecks, and performance metrics
+
+**Architecture Pattern:** Event-Driven Process Automation
+```
+Process Trigger → Workflow Engine → AI Decision Logic → Action Execution → State Update → Notification → Next Step
+```
+
+**Implementation:**
+- **State Machine**: Workflow state management with persistence
+- **Decision Engine**: AI-powered routing and approval logic
+- **Integration Layer**: Connections to email, SMS, and external services
+- **Monitoring System**: Process tracking and analytics
+
+**Dependencies:** Generated Applications, AI Service, Email/SMS integrations, Process Storage
+
+**Technology Stack:** Custom workflow engine, OpenAI for decision logic, Email/SMS APIs, Process state management
+
+### Template Generation System
+
+**Responsibility:** Convert successful applications into reusable templates with embedded AI assistance
+
+**Key Capabilities:**
+- **Application Analysis**: Analyze generated applications to identify reusable patterns
+- **Template Abstraction**: Create parameterized templates from specific applications
+- **AI Assistant Preservation**: Maintain intelligent assistance capabilities in templates
+- **Configuration Interface**: Generate user-friendly configuration options for template customization
+- **Template Validation**: Ensure template quality and completeness
+- **Template Catalog**: Organize and categorize templates for easy discovery
+
+**Architecture Pattern:** Template Factory with AI-Powered Abstraction
+```
+Successful Application → Pattern Analysis → Template Abstraction → AI Assistant Integration → Configuration Generation → Template Catalog
+```
+
+**Implementation:**
+- **Pattern Recognition**: AI-powered analysis of application components
+- **Template Engine**: Parameterized template generation system
+- **Configuration Builder**: Dynamic configuration interface generation
+- **Quality Assurance**: Automated template testing and validation
+
+**Dependencies:** Generated Applications, AI Service for analysis, Template Storage, Configuration System
+
+**Technology Stack:** Template engine, OpenAI for pattern analysis, Configuration management, Template storage
 
 ### Frontend Application (React/TypeScript)
 
-**Responsibility:** Primary user interface handling business logic, state management, and user interactions
+**Responsibility:** User interface for natural language input, application generation monitoring, and generated application management
 
 **Key Interfaces:**
-- Authentication management via Replit Auth integration
-- Real-time AI chat interface with streaming responses
-- Progressive onboarding wizard with role-based paths
-- Industry template gallery with search and filtering
-- Visual workflow builder with drag-drop capabilities
-- Analytics dashboard with KPI tracking
+- **Natural Language Input Interface**: Text area for business description input with AI-powered suggestions
+- **Application Generation Monitor**: Real-time progress tracking during application creation
+- **Generated Application Dashboard**: Management interface for created business applications
+- **Embedded AI Chat Interface**: Communication with AI assistants within generated applications
+- **Template Gallery**: Browse and deploy templates created from successful applications
+- **Application Analytics**: Performance metrics for generated applications
 
-**Dependencies:** Express API, WebSocket Server, Replit Auth, Browser Storage
+**Dependencies:** NLP Engine API, Application Generation Engine API, WebSocket Server for real-time updates
 
-**Technology Stack:** React 18.2, TypeScript 5.3, Shadcn UI, Tailwind CSS, React Query, Wouter routing
+**Technology Stack:** React 18.2, TypeScript 5.3, Shadcn UI, Tailwind CSS, React Query, Wouter routing, WebSocket client
 
 ### Express API Server
 
@@ -332,6 +631,176 @@ graph TD
     Auth --> ReplitAuth
 ```
 
+## Real-time AI Assistance Architecture (WebSocket)
+
+### WebSocket Communication Framework
+
+**Purpose:** Enable real-time AI assistance within generated business applications through embedded chatbots
+
+**Architecture Overview:**
+- **Connection Management**: Persistent WebSocket connections between generated applications and AI service layer
+- **Context Preservation**: Maintain application state and user context across real-time interactions
+- **Streaming Responses**: Real-time AI response streaming for immediate user assistance
+- **Action Execution**: Real-time execution of business actions triggered by AI chatbots
+- **Multi-Application Support**: Single WebSocket server supporting multiple generated applications
+
+### WebSocket Message Types
+
+```typescript
+// Connection establishment with application context
+interface ConnectionMessage {
+  type: 'connect';
+  applicationId: string;
+  userId: string;
+  sessionContext: {
+    currentForm?: string;
+    workflowStep?: string;
+    businessContext: object;
+  };
+}
+
+// Real-time AI assistance request
+interface AssistanceRequest {
+  type: 'assistance_request';
+  chatbotId: string;
+  message: string;
+  assistanceType: 'form_help' | 'process_guidance' | 'validation' | 'action_execution';
+  context: {
+    formData?: object;
+    currentStep?: string;
+    userInput?: object;
+  };
+}
+
+// Streaming AI response
+interface AIResponseStream {
+  type: 'ai_response';
+  chatbotId: string;
+  isStreaming: boolean;
+  content: string;
+  suggestedActions?: string[];
+  formValidation?: object;
+  executedActions?: string[];
+}
+
+// Business action execution
+interface ActionExecution {
+  type: 'execute_action';
+  chatbotId: string;
+  action: {
+    type: 'send_email' | 'create_task' | 'update_record' | 'trigger_workflow';
+    parameters: object;
+  };
+}
+
+// Process status updates
+interface ProcessUpdate {
+  type: 'process_update';
+  workflowExecutionId: string;
+  status: string;
+  currentStep: string;
+  message: string;
+  nextActions?: string[];
+}
+
+// Real-time form validation
+interface FormValidation {
+  type: 'form_validation';
+  formId: string;
+  fieldValidation: {
+    [fieldName: string]: {
+      isValid: boolean;
+      message?: string;
+      suggestions?: string[];
+    };
+  };
+}
+```
+
+### WebSocket Connection Architecture
+
+```mermaid
+graph TB
+    GeneratedApp1[Generated Business App 1] --> WSServer[WebSocket Server]
+    GeneratedApp2[Generated Business App 2] --> WSServer
+    GeneratedAppN[Generated Business App N] --> WSServer
+    
+    WSServer --> AIService[AI Service Layer]
+    WSServer --> ProcessEngine[Process Automation Engine]
+    WSServer --> IntegrationLayer[Integration Layer]
+    
+    AIService --> OpenAI[OpenAI GPT-4]
+    AIService --> Claude[Anthropic Claude]
+    
+    ProcessEngine --> WorkflowEngine[Workflow Execution]
+    ProcessEngine --> NotificationService[Notification Service]
+    
+    IntegrationLayer --> EmailAPI[Email Service]
+    IntegrationLayer --> SMSAPI[SMS Service]
+    IntegrationLayer --> ExternalAPIs[External Business APIs]
+    
+    subgraph "Real-time AI Assistance Flow"
+        WSServer --> ContextManager[Context Manager]
+        ContextManager --> SessionStorage[Session Storage]
+        ContextManager --> AIService
+    end
+    
+    subgraph "Generated Applications with Embedded AI"
+        GeneratedApp1
+        GeneratedApp2
+        GeneratedAppN
+    end
+```
+
+### WebSocket Server Implementation
+
+**Technology Stack:** 
+- WebSocket Server: `ws` library (Node.js)
+- Connection Management: Custom connection pool with application context
+- Message Routing: Application-aware message routing to appropriate AI services
+- Context Preservation: Redis-backed session storage for multi-server scaling
+
+**Key Components:**
+- **Connection Manager**: Handles WebSocket connections with application context binding
+- **Message Router**: Routes messages to appropriate AI services based on application and chatbot ID
+- **Context Manager**: Preserves user session and application state across interactions
+- **Stream Manager**: Manages AI response streaming with proper connection lifecycle
+- **Action Executor**: Executes business actions triggered by embedded AI chatbots
+
+**Scaling Considerations:**
+- Connection pooling for multiple generated applications
+- Horizontal scaling with Redis-backed session sharing
+- Message broadcasting for collaborative features in generated applications
+- Rate limiting to prevent abuse of AI assistance
+
+### Real-time AI Assistance Patterns
+
+1. **Proactive Assistance Pattern**:
+   - AI chatbots monitor user behavior within generated applications
+   - Automatically offer help when users hesitate or encounter errors
+   - WebSocket enables immediate assistance without user request
+
+2. **Contextual Help Pattern**:
+   - AI understands current application state (form, workflow step, data)
+   - Provides relevant assistance based on business context
+   - Real-time validation and suggestions during form completion
+
+3. **Action Execution Pattern**:
+   - Users can request AI to perform actions ("Send reminder to manager")
+   - AI executes business actions through WebSocket-connected services
+   - Immediate feedback and confirmation through real-time messaging
+
+4. **Process Guidance Pattern**:
+   - AI guides users through multi-step workflows
+   - Real-time status updates as workflows progress
+   - Intelligent routing suggestions based on business rules
+
+**Performance Requirements:**
+- WebSocket message latency: <100ms for 95% of messages
+- AI response streaming: <500ms first token, <100ms subsequent tokens
+- Concurrent connections: Support 1000+ simultaneous users across generated applications
+- Connection persistence: Automatic reconnection with context preservation
+
 ## External APIs
 
 ### OpenAI API
@@ -366,76 +835,138 @@ graph TD
 
 ## Core Workflows
 
-### User Onboarding Workflow
+### Natural Language Business Application Generation Workflow
 
 ```mermaid
 sequenceDiagram
-    participant User
+    participant User as Business User
     participant Frontend
-    participant Auth as Replit Auth
-    participant API
-    participant MemStorage
-    participant AI as AI Service
+    participant NLPEngine as NLP Engine
+    participant AppGenEngine as Application Generation Engine
+    participant ChatbotGen as Chatbot Generation Service
+    participant ProcessEngine as Process Automation Engine
+    participant Deployment as Deployment Service
+    participant WebSocket
 
-    User->>Frontend: Access platform
-    Frontend->>Auth: Initiate authentication
-    Auth-->>Frontend: Authentication success
-    Frontend->>API: Get user profile
-    API->>MemStorage: Check existing user
+    User->>Frontend: Input natural language description<br/>("Create employee onboarding with background checks")
+    Frontend->>NLPEngine: Parse business description
     
-    alt New User
-        Frontend->>User: Show role selection
-        User->>Frontend: Select role (Business/Technical)
-        Frontend->>API: Create user profile
-        API->>MemStorage: Store user with role
+    NLPEngine->>NLPEngine: Intent classification & entity extraction
+    NLPEngine->>NLPEngine: Workflow pattern detection
+    NLPEngine->>NLPEngine: Form requirements inference
+    NLPEngine->>NLPEngine: Integration needs identification
+    NLPEngine-->>Frontend: Structured business requirements
+    
+    Frontend->>User: Show extracted requirements for confirmation
+    User->>Frontend: Confirm/refine requirements
+    
+    Frontend->>AppGenEngine: Generate complete application
+    
+    par Application Generation
+        AppGenEngine->>AppGenEngine: Generate workflow logic
+        AppGenEngine->>AppGenEngine: Create dynamic forms
+        AppGenEngine->>AppGenEngine: Setup integrations
+        AppGenEngine->>ChatbotGen: Create embedded AI chatbots
+    end
+    
+    ChatbotGen->>ChatbotGen: Generate contextual AI assistants
+    ChatbotGen->>ChatbotGen: Configure business knowledge
+    ChatbotGen-->>AppGenEngine: Embedded chatbots ready
+    
+    AppGenEngine->>ProcessEngine: Setup workflow automation
+    ProcessEngine->>ProcessEngine: Configure approval routing
+    ProcessEngine->>ProcessEngine: Setup AI-powered validation
+    
+    AppGenEngine-->>Frontend: Complete application generated
+    Frontend->>Deployment: Deploy business application
+    Deployment->>WebSocket: Setup real-time AI assistance
+    Deployment-->>Frontend: Application deployed with URL
+    
+    Frontend->>User: Application ready with embedded AI chatbots
+```
+
+### Real-time AI Assistance Workflow (Within Generated Applications)
+
+```mermaid
+sequenceDiagram
+    participant AppUser as Application User
+    participant GeneratedApp as Generated Business App
+    participant EmbeddedBot as Embedded AI Chatbot
+    participant WebSocket
+    participant AIService as AI Service
+    participant ProcessEngine as Process Automation
+    participant Integration as External Integrations
+
+    AppUser->>GeneratedApp: Start using business application
+    GeneratedApp->>EmbeddedBot: User entered form section
+    EmbeddedBot->>WebSocket: Connect for real-time assistance
+    
+    alt Form Assistance
+        AppUser->>GeneratedApp: Struggles with form field
+        GeneratedApp->>EmbeddedBot: Request form help
+        EmbeddedBot->>AIService: Get contextual form assistance
+        AIService-->>EmbeddedBot: Smart suggestions & validation tips
+        EmbeddedBot->>WebSocket: Stream helpful guidance
+        WebSocket-->>GeneratedApp: Real-time chat assistance
+        GeneratedApp->>AppUser: Show AI-powered help
+    end
+    
+    alt Workflow Guidance
+        AppUser->>GeneratedApp: Submit completed form
+        GeneratedApp->>ProcessEngine: Trigger workflow execution
+        ProcessEngine->>EmbeddedBot: Update user on process status
+        EmbeddedBot->>WebSocket: Stream process updates
+        WebSocket-->>GeneratedApp: Real-time status updates
         
-        Frontend->>User: Start 4-step onboarding
-        User->>Frontend: Complete industry selection
-        Frontend->>AI: Get personalized recommendations
-        AI-->>Frontend: Industry-specific guidance
-        
-        Frontend->>User: Show template gallery
-        User->>Frontend: Browse templates
-        Frontend->>API: Track onboarding progress
-        API->>MemStorage: Update completion status
-    else Existing User
-        Frontend->>User: Direct to dashboard
+        ProcessEngine->>Integration: Execute external integrations
+        Integration-->>ProcessEngine: Integration results
+        ProcessEngine->>EmbeddedBot: Process completed
+        EmbeddedBot->>AppUser: "Your background check has been initiated"
+    end
+    
+    alt Action Execution
+        AppUser->>EmbeddedBot: "Send reminder to my manager"
+        EmbeddedBot->>AIService: Parse action request
+        AIService->>ProcessEngine: Execute business action
+        ProcessEngine->>Integration: Send email notification
+        Integration-->>ProcessEngine: Email sent confirmation
+        ProcessEngine-->>EmbeddedBot: Action completed
+        EmbeddedBot->>AppUser: "Reminder sent to John Smith"
     end
 ```
 
-### Template Configuration Workflow
+### Template Generation from Successful Applications Workflow
 
 ```mermaid
 sequenceDiagram
-    participant User
-    participant Frontend
-    participant API
-    participant AI as AI Service
-    participant OpenAI
-    participant WebSocket
+    participant Admin as Platform Admin
+    participant TemplateGen as Template Generation Service
+    participant AppAnalysis as Application Analysis AI
+    participant GeneratedApp as Source Application
+    participant TemplateStore as Template Storage
+    participant ConfigGen as Configuration Generator
 
-    User->>Frontend: Select template
-    Frontend->>API: Get template details
-    API-->>Frontend: Template configuration schema
+    Admin->>TemplateGen: Convert successful app to template
+    TemplateGen->>GeneratedApp: Analyze application structure
     
-    Frontend->>User: Show template preview
-    User->>Frontend: Start AI chat for customization
+    TemplateGen->>AppAnalysis: Extract reusable patterns
+    AppAnalysis->>AppAnalysis: Identify workflow patterns
+    AppAnalysis->>AppAnalysis: Extract form structures
+    AppAnalysis->>AppAnalysis: Analyze integration points
+    AppAnalysis->>AppAnalysis: Preserve AI chatbot capabilities
+    AppAnalysis-->>TemplateGen: Reusable application patterns
     
-    Frontend->>WebSocket: Connect for streaming
-    Frontend->>AI: Send configuration request
-    AI->>OpenAI: Stream chat completion
-    OpenAI-->>AI: Streaming response
-    AI-->>WebSocket: Forward stream to frontend
-    WebSocket-->>Frontend: Real-time AI response
+    TemplateGen->>ConfigGen: Create configuration interface
+    ConfigGen->>ConfigGen: Generate parameter options
+    ConfigGen->>ConfigGen: Create AI assistant template
+    ConfigGen-->>TemplateGen: Configuration schema
     
-    User->>Frontend: Confirm customizations
-    Frontend->>API: Save project configuration
-    API->>MemStorage: Store project data
+    TemplateGen->>TemplateStore: Store template with embedded AI
+    TemplateStore-->>TemplateGen: Template created successfully
     
-    Frontend->>User: Initiate deployment
-    API->>AI: Generate application code
-    AI-->>API: Zero-shot code generation
-    API-->>Frontend: Deployment complete
+    TemplateGen-->>Admin: Template ready for reuse
+    
+    Note over TemplateGen: Future users can now generate<br/>similar applications with "Create employee<br/>onboarding like Company X" descriptions
 ```
 
 ## REST API Spec
@@ -443,9 +974,9 @@ sequenceDiagram
 ```yaml
 openapi: 3.0.0
 info:
-  title: Enterprise AI Application Platform API
-  version: 1.0.0
-  description: Backend API for AI-powered application platform
+  title: Natural Language Business Application Generator API
+  version: 2.0.0
+  description: Backend API for Natural Language Business Application Generation with Embedded AI Chatbots
 servers:
   - url: http://localhost:5000/api
     description: Development server
@@ -456,23 +987,23 @@ paths:
       summary: Replit Auth callback handler
       responses:
         '302':
-          description: Redirect to dashboard after successful authentication
+          description: Redirect to application dashboard after authentication
   
   /user/profile:
     get:
-      summary: Get current user profile
+      summary: Get business user profile
       security:
         - bearerAuth: []
       responses:
         '200':
-          description: User profile data
+          description: Business user profile data
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/User'
     
     patch:
-      summary: Update user profile
+      summary: Update business user profile
       security:
         - bearerAuth: []
       requestBody:
@@ -481,9 +1012,8 @@ paths:
             schema:
               type: object
               properties:
-                role:
+                businessRole:
                   type: string
-                  enum: [business_user, technical_user]
                 industry:
                   type: string
                 preferences:
@@ -491,65 +1021,10 @@ paths:
       responses:
         '200':
           description: Updated user profile
-  
-  /templates:
-    get:
-      summary: Get template gallery
-      parameters:
-        - name: industry
-          in: query
-          schema:
-            type: string
-            enum: [healthcare, finance, ecommerce]
-        - name: role
-          in: query
-          schema:
-            type: string
-            enum: [business_user, technical_user]
-      responses:
-        '200':
-          description: Array of templates
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Template'
-  
-  /templates/{id}:
-    get:
-      summary: Get template details
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Template details
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Template'
-  
-  /projects:
-    get:
-      summary: Get user projects
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: Array of user projects
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Project'
-    
+
+  /nlp/parse-business-description:
     post:
-      summary: Create new project
+      summary: Parse natural language business description into structured requirements
       security:
         - bearerAuth: []
       requestBody:
@@ -558,26 +1033,105 @@ paths:
             schema:
               type: object
               required:
-                - name
-                - templateId
+                - description
               properties:
-                name:
+                description:
                   type: string
-                templateId:
-                  type: string
-                configuration:
+                  example: "Create employee onboarding with background checks and manager approvals"
+                context:
                   type: object
+                  description: Additional business context
       responses:
-        '201':
-          description: Created project
+        '200':
+          description: Structured business requirements extracted from natural language
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Project'
-  
-  /projects/{id}/deploy:
+                $ref: '#/components/schemas/BusinessRequirement'
+
+  /nlp/requirements/{id}/refine:
+    patch:
+      summary: Refine extracted business requirements
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refinements:
+                  type: object
+                  description: User refinements to extracted requirements
+      responses:
+        '200':
+          description: Updated business requirements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessRequirement'
+
+  /applications/generate:
     post:
-      summary: Deploy project application
+      summary: Generate complete business application from requirements
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - requirementId
+                - applicationName
+              properties:
+                requirementId:
+                  type: string
+                applicationName:
+                  type: string
+                customizations:
+                  type: object
+      responses:
+        '202':
+          description: Application generation initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  applicationId:
+                    type: string
+                  generationStatus:
+                    type: string
+                    enum: [generating, testing, deploying]
+                  estimatedCompletion:
+                    type: string
+                    format: date-time
+
+  /applications:
+    get:
+      summary: Get user's generated applications
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Array of generated business applications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GeneratedApplication'
+
+  /applications/{id}:
+    get:
+      summary: Get generated application details
       security:
         - bearerAuth: []
       parameters:
@@ -588,20 +1142,144 @@ paths:
             type: string
       responses:
         '200':
-          description: Deployment initiated
+          description: Generated application details with embedded chatbots
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneratedApplication'
+
+  /applications/{id}/deploy:
+    post:
+      summary: Deploy generated business application with embedded AI chatbots
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Application deployed successfully
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  status:
-                    type: string
                   deploymentUrl:
                     type: string
-  
-  /chat/sessions:
+                  embeddedChatbotEndpoints:
+                    type: array
+                    items:
+                      type: string
+                  status:
+                    type: string
+                    enum: [deployed, error]
+
+  /applications/{id}/chatbots:
+    get:
+      summary: Get embedded AI chatbots for application
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Array of embedded AI chatbots
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EmbeddedChatbot'
+
+  /chatbots/{id}/interact:
     post:
-      summary: Create AI chat session
+      summary: Interact with embedded AI chatbot within generated application
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - message
+              properties:
+                message:
+                  type: string
+                sessionContext:
+                  type: object
+                  description: Current application session context
+                formContext:
+                  type: object
+                  description: Current form being assisted with
+      responses:
+        '200':
+          description: AI chatbot response with potential actions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  response:
+                    type: string
+                  suggestedActions:
+                    type: array
+                    items:
+                      type: string
+                  formValidation:
+                    type: object
+                  executedActions:
+                    type: array
+                    items:
+                      type: string
+
+  /workflows/{id}/execute:
+    post:
+      summary: Execute business workflow within generated application
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - processData
+              properties:
+                processData:
+                  type: object
+                triggerEvent:
+                  type: string
+      responses:
+        '201':
+          description: Workflow execution initiated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowExecution'
+
+  /templates/generate:
+    post:
+      summary: Convert successful application into reusable template
       security:
         - bearerAuth: []
       requestBody:
@@ -609,19 +1287,68 @@ paths:
           application/json:
             schema:
               type: object
+              required:
+                - sourceApplicationId
+                - templateName
               properties:
-                projectId:
+                sourceApplicationId:
                   type: string
-                sessionType:
+                templateName:
                   type: string
-                  enum: [onboarding, template_config, workflow_builder]
+                description:
+                  type: string
+                businessCategory:
+                  type: string
       responses:
         '201':
-          description: Created chat session
+          description: Template created successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ChatSession'
+                $ref: '#/components/schemas/GeneratedTemplate'
+
+  /templates:
+    get:
+      summary: Get available templates with embedded AI assistance
+      parameters:
+        - name: businessCategory
+          in: query
+          schema:
+            type: string
+        - name: industry
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Array of reusable templates with embedded AI
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GeneratedTemplate'
+
+  /integrations/{applicationId}:
+    get:
+      summary: Get external integrations for generated application
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Array of external service integrations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IntegrationEndpoint'
 
 components:
   securitySchemes:
@@ -640,8 +1367,225 @@ components:
           type: string
         profile:
           type: object
-        role:
+        businessRole:
           type: string
+        industry:
+          type: string
+        generatedAppsCount:
+          type: number
+        preferences:
+          type: object
+
+    BusinessRequirement:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        originalDescription:
+          type: string
+        extractedEntities:
+          type: object
+        workflowPatterns:
+          type: array
+          items:
+            type: string
+        formRequirements:
+          type: array
+          items:
+            type: object
+        integrationNeeds:
+          type: array
+          items:
+            type: string
+        aiAssistancePoints:
+          type: array
+          items:
+            type: string
+        confidence:
+          type: number
+        status:
+          type: string
+          enum: [analyzing, validated, generating_app, completed]
+        createdAt:
+          type: string
+          format: date-time
+
+    GeneratedApplication:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        requirementId:
+          type: string
+        name:
+          type: string
+        applicationCode:
+          type: object
+        workflows:
+          type: array
+          items:
+            type: object
+        forms:
+          type: array
+          items:
+            type: object
+        integrations:
+          type: array
+          items:
+            type: object
+        embeddedChatbots:
+          type: array
+          items:
+            $ref: '#/components/schemas/EmbeddedChatbot'
+        businessLogic:
+          type: object
+        deploymentUrl:
+          type: string
+        status:
+          type: string
+          enum: [generating, testing, deployed, error]
+        analytics:
+          type: object
+        createdAt:
+          type: string
+          format: date-time
+
+    EmbeddedChatbot:
+      type: object
+      properties:
+        id:
+          type: string
+        applicationId:
+          type: string
+        name:
+          type: string
+        contextualKnowledge:
+          type: object
+        capabilities:
+          type: array
+          items:
+            type: string
+        conversationHistory:
+          type: array
+          items:
+            type: object
+        aiModel:
+          type: string
+          enum: [gpt-4, claude-3]
+        personalityConfig:
+          type: object
+        triggerPoints:
+          type: array
+          items:
+            type: string
+        integrationAccess:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [active, paused, updating]
+
+    WorkflowExecution:
+      type: object
+      properties:
+        id:
+          type: string
+        applicationId:
+          type: string
+        workflowDefinition:
+          type: object
+        currentStep:
+          type: string
+        processData:
+          type: object
+        approvals:
+          type: array
+          items:
+            type: object
+        notifications:
+          type: array
+          items:
+            type: object
+        assignedUsers:
+          type: array
+          items:
+            type: string
+        aiDecisions:
+          type: array
+          items:
+            type: object
+        status:
+          type: string
+          enum: [running, paused, completed, error]
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+
+    GeneratedTemplate:
+      type: object
+      properties:
+        id:
+          type: string
+        sourceApplicationId:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        businessCategory:
+          type: string
+        applicationPattern:
+          type: object
+        parameterization:
+          type: object
+        embeddedAITemplate:
+          type: object
+        usageCount:
+          type: number
+        rating:
+          type: number
+        validationRules:
+          type: object
+        createdAt:
+          type: string
+          format: date-time
+
+    IntegrationEndpoint:
+      type: object
+      properties:
+        id:
+          type: string
+        applicationId:
+          type: string
+        serviceName:
+          type: string
+        endpointConfig:
+          type: object
+        triggerEvents:
+          type: array
+          items:
+            type: string
+        dataMapping:
+          type: object
+        authenticationMethod:
+          type: string
+          enum: [api_key, oauth, webhook]
+        status:
+          type: string
+          enum: [active, inactive, error]
+        usageMetrics:
+          type: object
+        createdAt:
+          type: string
+          format: date-time
           enum: [business_user, technical_user]
         industry:
           type: string
