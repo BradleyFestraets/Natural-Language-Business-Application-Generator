@@ -8,7 +8,11 @@ import {
   type EmbeddedChatbot,
   type InsertEmbeddedChatbot,
   type WorkflowExecution,
-  type InsertWorkflowExecution
+  type InsertWorkflowExecution,
+  type Organization,
+  type InsertOrganization,
+  type OrgMembership,
+  type InsertOrgMembership,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
@@ -44,6 +48,23 @@ export interface IStorage {
   updateWorkflowExecution(id: string, updates: Partial<InsertWorkflowExecution>): Promise<WorkflowExecution | undefined>;
   listWorkflowExecutions(userId: string, applicationId?: string): Promise<WorkflowExecution[]>;
   deleteWorkflowExecution(id: string): Promise<boolean>;
+
+  // ===== AUTHORIZATION & RBAC OPERATIONS =====
+  
+  // Organization operations
+  getOrganization(id: string): Promise<Organization | undefined>;
+  createOrganization(organization: InsertOrganization): Promise<Organization>;
+  listUserOrganizations(userId: string): Promise<Organization[]>;
+  
+  // Organization membership operations
+  getUserOrgMembership(userId: string, organizationId: string): Promise<OrgMembership | undefined>;
+  addOrgMembership(membership: InsertOrgMembership): Promise<OrgMembership>;
+  removeOrgMembership(userId: string, organizationId: string): Promise<boolean>;
+  listOrgMembers(organizationId: string): Promise<OrgMembership[]>;
+  
+  // Permission resolution operations  
+  getUserPermissions(userId: string, organizationId: string): Promise<string[]>;
+  hasOrgMembership(userId: string, organizationId: string): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
@@ -52,6 +73,8 @@ export class MemStorage implements IStorage {
   private generatedApplications: Map<string, GeneratedApplication>;
   private embeddedChatbots: Map<string, EmbeddedChatbot>;
   private workflowExecutions: Map<string, WorkflowExecution>;
+  private organizations: Map<string, Organization>;
+  private orgMemberships: Map<string, OrgMembership>;
 
   constructor() {
     this.users = new Map();
@@ -59,6 +82,52 @@ export class MemStorage implements IStorage {
     this.generatedApplications = new Map();
     this.embeddedChatbots = new Map();
     this.workflowExecutions = new Map();
+    this.organizations = new Map();
+    this.orgMemberships = new Map();
+    
+    // Initialize with a default organization for testing
+    this.initializeDefaultData();
+  }
+
+  private initializeDefaultData() {
+    // Create default organization for testing
+    const defaultOrg: Organization = {
+      id: "test-org-123",
+      name: "Test Organization",
+      subdomain: "test",
+      plan: "enterprise",
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    this.organizations.set(defaultOrg.id, defaultOrg);
+  }
+
+  /**
+   * Helper method to add a user's organization membership for testing
+   * Call this when a user first authenticates to grant them access
+   */
+  async ensureUserOrgMembership(userId: string, organizationId: string = "test-org-123", role: string = "owner"): Promise<OrgMembership> {
+    // Check if membership already exists
+    const existing = await this.getUserOrgMembership(userId, organizationId);
+    if (existing) {
+      return existing;
+    }
+
+    // Create new membership
+    const membership: OrgMembership = {
+      id: randomUUID(),
+      organizationId,
+      userId,
+      role: role as any,
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
+    this.orgMemberships.set(membership.id, membership);
+    console.log(`[STORAGE] Created org membership: user ${userId} -> org ${organizationId} as ${role}`);
+    return membership;
   }
 
   // ===== USER OPERATIONS =====
@@ -259,6 +328,157 @@ export class MemStorage implements IStorage {
 
   async deleteWorkflowExecution(id: string): Promise<boolean> {
     return this.workflowExecutions.delete(id);
+  }
+
+  // ===== AUTHORIZATION & RBAC OPERATIONS =====
+  
+  async getOrganization(id: string): Promise<Organization | undefined> {
+    return this.organizations.get(id);
+  }
+
+  async createOrganization(organizationData: InsertOrganization): Promise<Organization> {
+    const organization: Organization = {
+      id: organizationData.id || randomUUID(),
+      name: organizationData.name,
+      subdomain: organizationData.subdomain || null,
+      plan: organizationData.plan || "starter",
+      isActive: organizationData.isActive ?? true,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
+    this.organizations.set(organization.id, organization);
+    return organization;
+  }
+
+  async listUserOrganizations(userId: string): Promise<Organization[]> {
+    const userMemberships = Array.from(this.orgMemberships.values())
+      .filter(membership => membership.userId === userId && membership.isActive);
+    
+    const organizations: Organization[] = [];
+    for (const membership of userMemberships) {
+      const org = this.organizations.get(membership.organizationId);
+      if (org && org.isActive) {
+        organizations.push(org);
+      }
+    }
+    
+    return organizations;
+  }
+
+  async getUserOrgMembership(userId: string, organizationId: string): Promise<OrgMembership | undefined> {
+    return Array.from(this.orgMemberships.values())
+      .find(membership => 
+        membership.userId === userId && 
+        membership.organizationId === organizationId &&
+        membership.isActive
+      );
+  }
+
+  async addOrgMembership(membershipData: InsertOrgMembership): Promise<OrgMembership> {
+    const membership: OrgMembership = {
+      id: membershipData.id || randomUUID(),
+      organizationId: membershipData.organizationId,
+      userId: membershipData.userId,
+      role: membershipData.role,
+      isActive: membershipData.isActive ?? true,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
+    this.orgMemberships.set(membership.id, membership);
+    return membership;
+  }
+
+  async removeOrgMembership(userId: string, organizationId: string): Promise<boolean> {
+    const membership = await this.getUserOrgMembership(userId, organizationId);
+    if (membership) {
+      return this.orgMemberships.delete(membership.id);
+    }
+    return false;
+  }
+
+  async listOrgMembers(organizationId: string): Promise<OrgMembership[]> {
+    return Array.from(this.orgMemberships.values())
+      .filter(membership => 
+        membership.organizationId === organizationId &&
+        membership.isActive
+      );
+  }
+
+  async getUserPermissions(userId: string, organizationId: string): Promise<string[]> {
+    // Get user's organization membership
+    const membership = await this.getUserOrgMembership(userId, organizationId);
+    if (!membership) {
+      return []; // No membership = no permissions
+    }
+
+    // For now, return built-in role permissions
+    // This would be enhanced later to include custom role bindings
+    return this.getBuiltInRolePermissions(membership.role);
+  }
+
+  async hasOrgMembership(userId: string, organizationId: string): Promise<boolean> {
+    const membership = await this.getUserOrgMembership(userId, organizationId);
+    return membership !== undefined;
+  }
+
+  // Helper method to get built-in role permissions
+  private getBuiltInRolePermissions(role: string): string[] {
+    // Import permission constants from authorization middleware
+    const rolePermissions = {
+      owner: [
+        "org:read", "org:write", "org:delete", "org:admin",
+        "user:read", "user:write", "user:delete", "user:invite",
+        "role:read", "role:write", "role:delete", "role:bind",
+        "task:read", "task:write", "task:delete", "task:assign",
+        "approval:read", "approval:write", "approval:approve", "approval:reject",
+        "integration:read", "integration:write", "integration:delete", "integration:execute",
+        "workflow:read", "workflow:write", "workflow:delete", "workflow:execute",
+        "report:read", "report:write", "report:delete", "report:export",
+        "analytics:read", "audit:read"
+      ],
+      admin: [
+        "org:read", "org:write",
+        "user:read", "user:write", "user:invite",
+        "role:read", "role:write", "role:bind",
+        "task:read", "task:write", "task:assign",
+        "approval:read", "approval:write", "approval:approve",
+        "integration:read", "integration:write", "integration:execute",
+        "workflow:read", "workflow:write", "workflow:execute",
+        "report:read", "report:write", "report:export",
+        "analytics:read", "audit:read"
+      ],
+      manager: [
+        "org:read",
+        "user:read",
+        "task:read", "task:write", "task:assign",
+        "approval:read", "approval:write", "approval:approve",
+        "integration:read", "integration:execute",
+        "workflow:read", "workflow:execute",
+        "report:read", "report:write"
+      ],
+      contributor: [
+        "org:read",
+        "user:read",
+        "task:read", "task:write",
+        "approval:read",
+        "integration:read",
+        "workflow:read",
+        "report:read"
+      ],
+      viewer: [
+        "org:read",
+        "user:read",
+        "task:read",
+        "approval:read",
+        "integration:read",
+        "workflow:read",
+        "report:read"
+      ]
+    };
+
+    return rolePermissions[role as keyof typeof rolePermissions] || [];
   }
 }
 

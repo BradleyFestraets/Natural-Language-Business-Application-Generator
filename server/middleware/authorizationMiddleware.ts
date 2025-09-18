@@ -175,23 +175,24 @@ export function requireOrganization(organizationParam: 'body' | 'params' | 'quer
       }
 
       // Check if user has access to this organization
-      // TODO: Implement storage.getUserOrgMembership when storage is expanded
-      // For now, we'll stub this check and assume valid access
-      // const membership = await storage.getUserOrgMembership(userId, organizationId);
+      const hasAccess = await storage.hasOrgMembership(userId, organizationId);
       
-      // if (!membership || !membership.isActive) {
-      //   res.status(403).json({
-      //     error: "Organization Access Denied",
-      //     message: "You do not have access to this organization",
-      //     code: "ORG_ACCESS_DENIED",
-      //     organizationId
-      //   });
-      //   return;
-      // }
+      if (!hasAccess) {
+        res.status(403).json({
+          error: "Organization Access Denied",
+          message: "You do not have access to this organization",
+          code: "ORG_ACCESS_DENIED",
+          organizationId
+        });
+        return;
+      }
 
+      // Get user's org membership for role context
+      const membership = await storage.getUserOrgMembership(userId, organizationId);
+      
       // Add organization context to request
       req.organizationId = organizationId;
-      // req.userRole = membership.role;
+      req.userRole = membership?.role;
       
       next();
     } catch (error) {
@@ -231,12 +232,8 @@ export function requirePermissions(...permissions: string[]) {
         return;
       }
 
-      // Get user permissions (combine org role permissions + custom role permissions)
-      // TODO: Implement when storage is expanded
-      // const userPermissions = await getUserPermissions(userId, organizationId);
-      
-      // For now, stub with owner permissions for testing
-      const userPermissions = [...ORG_ROLE_PERMISSIONS.owner] as string[];
+      // Get user permissions from storage-backed authorization
+      const userPermissions = await storage.getUserPermissions(userId, organizationId);
       
       // Check if user has all required permissions
       const hasAllPermissions = permissions.every(permission => 
@@ -298,26 +295,15 @@ export function requireUserManagement() {
 /**
  * Get all permissions for a user in an organization
  * Combines org membership role permissions + custom role binding permissions
- * TODO: Implement when storage is expanded
+ * Now implemented using storage-backed authorization
  */
 async function getUserPermissions(userId: string, organizationId: string): Promise<string[]> {
-  const permissions = new Set<string>();
-
-  // Get org membership permissions
-  // const membership = await storage.getUserOrgMembership(userId, organizationId);
-  // if (membership && membership.isActive) {
-  //   const rolePermissions = ORG_ROLE_PERMISSIONS[membership.role] || [];
-  //   rolePermissions.forEach(permission => permissions.add(permission));
-  // }
-
-  // Get custom role binding permissions
-  // const roleBindings = await storage.getUserRoleBindings(userId, organizationId);
-  // for (const binding of roleBindings) {
-  //   const role = await storage.getRole(binding.roleId);
-  //   if (role && role.permissions) {
-  //     role.permissions.forEach(permission => permissions.add(permission));
-  //   }
-  // }
-
-  return Array.from(permissions);
+  try {
+    // Use storage implementation which handles both built-in roles and custom roles
+    return await storage.getUserPermissions(userId, organizationId);
+  } catch (error) {
+    console.error(`[AUTH] Error getting permissions for user ${userId} in org ${organizationId}:`, error);
+    // Fail closed - return empty permissions on error
+    return [];
+  }
 }
