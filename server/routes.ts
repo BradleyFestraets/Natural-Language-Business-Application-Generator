@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { z } from "zod";
 import { insertBusinessRequirementSchema, insertGeneratedApplicationSchema, insertEmbeddedChatbotSchema } from "@shared/schema";
+import { NLPService } from "./services/nlpService.js";
 
 // Validation schemas for API requests
 const parseBusinessDescriptionSchema = z.object({
@@ -36,6 +37,9 @@ const chatbotInteractionSchema = z.object({
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
+  // Initialize NLP Service
+  const nlpService = new NLPService();
+  
   // Health Check Endpoint
   app.get("/api/health", (req: Request, res: Response) => {
     res.status(200).json({
@@ -54,35 +58,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validatedData = parseBusinessDescriptionSchema.parse(req.body);
       const { description, userId, conversationId, context } = validatedData;
       
-      // TODO: Integrate with OpenAI GPT-4 for actual parsing
-      // For now, return mock structured data
-      const mockExtractedEntities = {
-        processes: extractProcesses(description),
-        forms: extractForms(description),
-        approvals: extractApprovals(description),
-        integrations: extractIntegrations(description)
-      };
+      // Use real NLP Service with OpenAI GPT-4 integration
+      const parseResult = await nlpService.parseBusinessDescription(description, {
+        conversationHistory: context?.conversationHistory || [],
+        preserveContext: !!conversationId
+      });
       
-      const mockWorkflowPatterns = identifyWorkflowPatterns(description);
-      const confidence = calculateConfidence(description);
+      const extractedEntities = {
+        processes: parseResult.processes,
+        forms: parseResult.forms,
+        approvals: parseResult.approvals,
+        integrations: parseResult.integrations
+      };
+      const workflowPatterns = parseResult.workflowPatterns;
+      const confidence = parseResult.confidence;
       
       // Store the business requirement
       const businessRequirement = await storage.createBusinessRequirement({
         userId,
         originalDescription: description,
-        extractedEntities: mockExtractedEntities,
-        workflowPatterns: mockWorkflowPatterns,
+        extractedEntities,
+        workflowPatterns,
         confidence,
-        status: "analyzing"
+        status: "validated"
       });
       
       res.status(200).json({
         businessRequirementId: businessRequirement.id,
-        extractedEntities: mockExtractedEntities,
-        workflowPatterns: mockWorkflowPatterns,
+        extractedEntities,
+        workflowPatterns,
         confidence,
-        status: "analyzing",
-        suggestions: generateSuggestions(description)
+        status: "validated",
+        suggestions: parseResult.recommendations || [],
+        validationWarnings: parseResult.validationWarnings || [],
+        usage: parseResult.usage
       });
       
     } catch (error) {
@@ -100,18 +109,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validatedData = validateDescriptionSchema.parse(req.body);
       const { description } = validatedData;
       
-      const completenessScore = calculateCompletenessScore(description);
-      const isValid = completenessScore >= 0.7;
-      const suggestions = generateCompletnessSuggestions(description);
+      // Use real NLP Service for validation
+      const validationResult = await nlpService.validateDescription(description);
       
       res.status(200).json({
-        isValid,
-        completenessScore,
-        suggestions,
+        isValid: validationResult.isValid,
+        confidence: validationResult.confidence,
+        score: validationResult.score,
+        suggestions: validationResult.suggestions,
+        recommendations: validationResult.recommendations,
         requiredElements: {
-          hasProcess: description.toLowerCase().includes('process') || description.toLowerCase().includes('workflow'),
-          hasUsers: description.toLowerCase().includes('user') || description.toLowerCase().includes('employee'),
-          hasOutcome: description.toLowerCase().includes('approval') || description.toLowerCase().includes('complete')
+          hasProcess: validationResult.score.businessContext > 0.5,
+          hasUsers: validationResult.score.specificity > 0.5,
+          hasOutcome: validationResult.score.technicalDetail > 0.3
         }
       });
       
