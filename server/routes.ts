@@ -4,18 +4,17 @@ import { storage } from "./storage";
 import { z } from "zod";
 import { insertBusinessRequirementSchema, insertGeneratedApplicationSchema, insertEmbeddedChatbotSchema } from "@shared/schema";
 import { NLPService } from "./services/nlpService.js";
+import { setupAuth, isAuthenticated } from "./replitAuth";
 
-// Validation schemas for API requests
+// Validation schemas for API requests (userId removed - derived from auth session)
 const parseBusinessDescriptionSchema = z.object({
   description: z.string().min(10, "Description must be at least 10 characters"),
-  userId: z.string(),
   conversationId: z.string().optional(),
   context: z.record(z.any()).optional()
 });
 
 const validateDescriptionSchema = z.object({
-  description: z.string().min(1, "Description cannot be empty"),
-  userId: z.string()
+  description: z.string().min(1, "Description cannot be empty")
 });
 
 const generateApplicationSchema = z.object({
@@ -30,15 +29,29 @@ const generateWorkflowSchema = z.object({
 
 const chatbotInteractionSchema = z.object({
   chatbotId: z.string(),
-  userId: z.string(),
   message: z.string().min(1, "Message cannot be empty"),
   sessionId: z.string().optional()
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
+  // Set up authentication first
+  await setupAuth(app);
+  
   // Initialize NLP Service
   const nlpService = new NLPService();
+  
+  // Auth routes
+  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      res.json(user);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
   
   // Health Check Endpoint
   app.get("/api/health", (req: Request, res: Response) => {
@@ -53,10 +66,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ===== NLP ENDPOINTS =====
   
   // Parse business description into structured requirements
-  app.post("/api/nlp/parse-business-description", async (req: Request, res: Response) => {
+  app.post("/api/nlp/parse-business-description", isAuthenticated, async (req: any, res: Response) => {
     try {
       const validatedData = parseBusinessDescriptionSchema.parse(req.body);
-      const { description, userId, conversationId, context } = validatedData;
+      const { description, conversationId, context } = validatedData;
+      const userId = req.user.claims.sub; // Derive userId from authenticated session
       
       // Use real NLP Service with OpenAI GPT-4 integration
       const parseResult = await nlpService.parseBusinessDescription(description, {
@@ -104,7 +118,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Validate business description completeness
-  app.post("/api/nlp/validate-description", async (req: Request, res: Response) => {
+  app.post("/api/nlp/validate-description", isAuthenticated, async (req: any, res: Response) => {
     try {
       const validatedData = validateDescriptionSchema.parse(req.body);
       const { description } = validatedData;
@@ -137,7 +151,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ===== APPLICATION GENERATION ENDPOINTS =====
   
   // Start complete application generation from business requirements
-  app.post("/api/generate/application", async (req: Request, res: Response) => {
+  app.post("/api/generate/application", isAuthenticated, async (req: any, res: Response) => {
     try {
       const validatedData = generateApplicationSchema.parse(req.body);
       const { businessRequirementId } = validatedData;
@@ -176,7 +190,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Generate specific workflow within an application
-  app.post("/api/generate/workflow", async (req: Request, res: Response) => {
+  app.post("/api/generate/workflow", isAuthenticated, async (req: any, res: Response) => {
     try {
       const validatedData = generateWorkflowSchema.parse(req.body);
       const { applicationId, workflowType, configuration } = validatedData;
@@ -208,7 +222,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Get application generation status
-  app.get("/api/generate/application/:id/status", async (req: Request, res: Response) => {
+  app.get("/api/generate/application/:id/status", isAuthenticated, async (req: any, res: Response) => {
     try {
       const { id } = req.params;
       
@@ -232,7 +246,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ===== CHATBOT ENDPOINTS =====
   
   // Create embedded chatbot for generated application
-  app.post("/api/chatbot/create", async (req: Request, res: Response) => {
+  app.post("/api/chatbot/create", isAuthenticated, async (req: any, res: Response) => {
     try {
       const validatedData = insertEmbeddedChatbotSchema.parse(req.body);
       
@@ -256,10 +270,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Handle chatbot interactions
-  app.post("/api/chatbot/interact", async (req: Request, res: Response) => {
+  app.post("/api/chatbot/interact", isAuthenticated, async (req: any, res: Response) => {
     try {
       const validatedData = chatbotInteractionSchema.parse(req.body);
-      const { chatbotId, userId, message, sessionId } = validatedData;
+      const { chatbotId, message, sessionId } = validatedData;
+      const userId = req.user.claims.sub; // Derive userId from authenticated session
       
       const chatbot = await storage.getEmbeddedChatbot(chatbotId);
       if (!chatbot) {
@@ -292,7 +307,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Get chatbot details
-  app.get("/api/chatbot/:id", async (req: Request, res: Response) => {
+  app.get("/api/chatbot/:id", isAuthenticated, async (req: any, res: Response) => {
     try {
       const { id } = req.params;
       

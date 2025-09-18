@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { isUnauthorizedError } from "@/lib/authUtils";
 import NaturalLanguageInput from "@/components/nlp/NaturalLanguageInput";
 import RequirementVisualization from "@/components/nlp/RequirementVisualization";
 
@@ -10,14 +12,29 @@ export default function NaturalLanguageInputPage() {
   const [extractedData, setExtractedData] = useState<any>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const { toast } = useToast();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      toast({
+        title: "Authentication Required",
+        description: "You need to log in to use this application.",
+        variant: "destructive",
+      });
+      setTimeout(() => {
+        window.location.href = "/api/login";
+      }, 1000);
+    }
+  }, [isAuthenticated, isLoading, toast]);
 
   // Mutation for parsing business description
   const parseDescriptionMutation = useMutation({
     mutationFn: async (data: { description: string }) => {
       const response = await apiRequest("POST", "/api/nlp/parse-business-description", {
-        description: data.description,
-        userId: "user-1" // TODO: Replace with actual user ID from auth
-        // Note: omitting optional conversationId and context fields
+        description: data.description
+        // Note: userId now derived from authenticated session server-side
+        // Optional conversationId and context fields omitted
       });
       return response.json();
     },
@@ -37,6 +54,17 @@ export default function NaturalLanguageInputPage() {
       });
     },
     onError: (error) => {
+      if (isUnauthorizedError(error as Error)) {
+        toast({
+          title: "Session Expired",
+          description: "Please log in again to continue.",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 1000);
+        return;
+      }
       toast({
         title: "Analysis Failed",
         description: "Failed to analyze business requirements. Please try again.",
@@ -62,6 +90,17 @@ export default function NaturalLanguageInputPage() {
       });
     },
     onError: (error) => {
+      if (isUnauthorizedError(error as Error)) {
+        toast({
+          title: "Session Expired",
+          description: "Please log in again to continue.",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 1000);
+        return;
+      }
       toast({
         title: "Generation Failed",
         description: "Failed to start application generation. Please try again.",
