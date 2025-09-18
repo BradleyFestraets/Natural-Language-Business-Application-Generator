@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { isAIServiceAvailable } from "../config/validation";
 
 export interface ExtractedBusinessData {
   processes: string[];
@@ -60,9 +61,15 @@ export class NLPService {
   private cacheTimestamps: Map<string, number> = new Map();
 
   constructor() {
-    this.openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY
-    });
+    // Only initialize OpenAI if API key is available
+    if (process.env.OPENAI_API_KEY) {
+      this.openai = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY
+      });
+    } else {
+      // Placeholder client for graceful degradation
+      this.openai = null as any;
+    }
   }
 
   /**
@@ -72,6 +79,11 @@ export class NLPService {
     conversationHistory?: any[];
     preserveContext?: boolean;
   }): Promise<ExtractedBusinessData> {
+    // Check if AI service is available
+    if (!isAIServiceAvailable() || !this.openai) {
+      throw new Error("AI service unavailable: OpenAI API key not configured or service unreachable");
+    }
+
     const cacheKey = this.getCacheKey(description);
     const cached = this.getCachedResult(cacheKey);
     if (cached) {

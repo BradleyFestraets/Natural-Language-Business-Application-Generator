@@ -5,6 +5,8 @@ import { z } from "zod";
 import { insertBusinessRequirementSchema, insertGeneratedApplicationSchema, insertEmbeddedChatbotSchema } from "@shared/schema";
 import { NLPService } from "./services/nlpService.js";
 import { setupAuth, isAuthenticated } from "./replitAuth";
+import { requireAIServiceMiddleware, checkAIServiceMiddleware } from "./middleware/aiServiceMiddleware";
+import { globalServiceHealth } from "./config/validation";
 
 // Validation schemas for API requests (userId removed - derived from auth session)
 const parseBusinessDescriptionSchema = z.object({
@@ -53,20 +55,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Health Check Endpoint
+  // Health Check Endpoint - Enhanced with service status
   app.get("/api/health", (req: Request, res: Response) => {
-    res.status(200).json({
-      status: "healthy",
+    const allServicesHealthy = Object.values(globalServiceHealth).every(status => status === 'available');
+    const httpStatus = allServicesHealthy ? 200 : 503;
+    
+    res.status(httpStatus).json({
+      status: allServicesHealthy ? "healthy" : "degraded",
       timestamp: new Date().toISOString(),
       version: "1.0.0",
-      service: "Natural Language Business Application Generator"
+      service: "Natural Language Business Application Generator",
+      services: {
+        openai: globalServiceHealth.openai,
+        database: globalServiceHealth.database,
+        session: globalServiceHealth.session
+      },
+      degraded: !allServicesHealthy,
+      message: allServicesHealthy ? "All services operational" : "Some services are unavailable"
     });
   });
 
   // ===== NLP ENDPOINTS =====
   
   // Parse business description into structured requirements
-  app.post("/api/nlp/parse-business-description", isAuthenticated, async (req: any, res: Response) => {
+  app.post("/api/nlp/parse-business-description", isAuthenticated, requireAIServiceMiddleware, async (req: any, res: Response) => {
     try {
       const validatedData = parseBusinessDescriptionSchema.parse(req.body);
       const { description, conversationId, context } = validatedData;
@@ -118,7 +130,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Validate business description completeness
-  app.post("/api/nlp/validate-description", isAuthenticated, async (req: any, res: Response) => {
+  app.post("/api/nlp/validate-description", isAuthenticated, requireAIServiceMiddleware, async (req: any, res: Response) => {
     try {
       const validatedData = validateDescriptionSchema.parse(req.body);
       const { description } = validatedData;

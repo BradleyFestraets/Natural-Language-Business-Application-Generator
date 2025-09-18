@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { validateConfig, checkServiceHealth, updateGlobalServiceHealth } from "./config/validation";
 
 const app = express();
 app.use(express.json());
@@ -37,6 +38,31 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Validate configuration at startup
+  log("Validating server configuration...");
+  const configValidation = validateConfig();
+  
+  if (!configValidation.isValid) {
+    console.error("❌ Server startup failed due to configuration errors:");
+    configValidation.errors.forEach(error => console.error(`  - ${error}`));
+    process.exit(1);
+  }
+
+  if (configValidation.warnings.length > 0) {
+    console.warn("⚠️  Configuration warnings:");
+    configValidation.warnings.forEach(warning => console.warn(`  - ${warning}`));
+  }
+
+  // Check service health
+  log("Checking service health...");
+  const serviceHealth = await checkServiceHealth();
+  updateGlobalServiceHealth(serviceHealth);
+
+  log(`Service Status:
+    - OpenAI: ${serviceHealth.openai}
+    - Database: ${serviceHealth.database}
+    - Session: ${serviceHealth.session}`);
+
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
