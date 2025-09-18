@@ -7,6 +7,15 @@ import { NLPService } from "./services/nlpService.js";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { requireAIServiceMiddleware, checkAIServiceMiddleware } from "./middleware/aiServiceMiddleware";
 import { globalServiceHealth } from "./config/validation";
+import { 
+  requireOrganization, 
+  requirePermissions, 
+  requireAdmin, 
+  requireOrgRead,
+  requireUserManagement,
+  SYSTEM_PERMISSIONS,
+  type AuthorizedRequest 
+} from "./middleware/authorizationMiddleware";
 
 // Validation schemas for API requests (userId removed - derived from auth session)
 const parseBusinessDescriptionSchema = z.object({
@@ -74,6 +83,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       message: allServicesHealthy ? "All services operational" : "Some services are unavailable"
     });
   });
+
+  // ===== ADMIN API ENDPOINTS =====
+  
+  // Demo admin endpoint with organization and permission requirements
+  app.get("/api/admin/organizations/:organizationId", 
+    isAuthenticated, 
+    requireOrganization('params'),
+    requireOrgRead(),
+    async (req: AuthorizedRequest, res: Response) => {
+      try {
+        res.status(200).json({
+          message: "Organization access granted",
+          organizationId: req.organizationId,
+          userPermissions: req.userPermissions,
+          timestamp: new Date().toISOString()
+        });
+      } catch (error) {
+        console.error("Admin organization error:", error);
+        res.status(500).json({ message: "Internal server error" });
+      }
+    }
+  );
 
   // ===== NLP ENDPOINTS =====
   
