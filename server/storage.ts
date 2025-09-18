@@ -1,6 +1,6 @@
 import { 
   type User, 
-  type InsertUser,
+  type UpsertUser,
   type BusinessRequirement,
   type InsertBusinessRequirement,
   type GeneratedApplication,
@@ -13,10 +13,9 @@ import {
 import { randomUUID } from "crypto";
 
 export interface IStorage {
-  // User operations
+  // User operations (IMPORTANT: Required for Replit Auth)
   getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  upsertUser(user: UpsertUser): Promise<User>;
 
   // Business Requirement operations
   getBusinessRequirement(id: string): Promise<BusinessRequirement | undefined>;
@@ -68,22 +67,20 @@ export class MemStorage implements IStorage {
     return this.users.get(id);
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
-  }
-
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const now = new Date();
-    const user: User = { 
-      ...insertUser, 
-      id,
-      createdAt: now,
-      updatedAt: now
+  async upsertUser(userData: UpsertUser): Promise<User> {
+    const existingUser = userData.id ? this.users.get(userData.id) : undefined;
+    
+    const user: User = {
+      id: userData.id || randomUUID(),
+      email: userData.email || null,
+      firstName: userData.firstName || null,
+      lastName: userData.lastName || null,
+      profileImageUrl: userData.profileImageUrl || null,
+      createdAt: existingUser?.createdAt || new Date(),
+      updatedAt: new Date(),
     };
-    this.users.set(id, user);
+    
+    this.users.set(user.id, user);
     return user;
   }
 

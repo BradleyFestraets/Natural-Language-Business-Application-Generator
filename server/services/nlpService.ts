@@ -68,7 +68,10 @@ export class NLPService {
   /**
    * Parse business description into structured requirements using GPT-4
    */
-  async parseBusinessDescription(description: string): Promise<ExtractedBusinessData> {
+  async parseBusinessDescription(description: string, options?: {
+    conversationHistory?: any[];
+    preserveContext?: boolean;
+  }): Promise<ExtractedBusinessData> {
     const cacheKey = this.getCacheKey(description);
     const cached = this.getCachedResult(cacheKey);
     if (cached) {
