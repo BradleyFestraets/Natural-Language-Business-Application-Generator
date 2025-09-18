@@ -440,6 +440,866 @@ This document breaks down the PRD's 5 epics and 20 user stories into **granular,
 
 ---
 
+## EPIC 2: Natural Language Processing Engine
+
+### Story 2.1: Natural Language Input Interface  
+**Status**: Draft  
+**Priority**: P0 (Critical - Core NLP)  
+**Estimate**: 5 story points
+
+**Story**: As a **Business User**, I want **to describe my business application needs in plain English and receive intelligent parsing**, so that **I can create custom applications without technical knowledge**.
+
+**Acceptance Criteria**:
+1. Natural language input interface accepts business descriptions with streaming AI feedback
+2. Real-time parsing displays extracted entities (processes, forms, approvals, integrations)
+3. System provides intelligent suggestions and auto-completion for common business scenarios
+4. Input validation ensures business descriptions contain sufficient detail for application generation
+5. Interface maintains conversation context across multiple clarification rounds
+6. Parsing response time maintains <2 seconds for initial understanding display
+7. Support for voice input with speech-to-text integration for accessibility
+8. AI confidence scoring shows certainty levels for extracted requirements
+
+**Tasks / Subtasks**:
+- [ ] Natural language input UI (AC: 1, 7)
+  - [ ] Create natural language input component with rich text area
+  - [ ] Implement streaming response display for real-time AI feedback
+  - [ ] Add speech-to-text integration using Web Speech API
+- [ ] Real-time parsing display (AC: 2, 8)
+  - [ ] Create requirement extraction visualization component
+  - [ ] Implement confidence scoring display with visual indicators
+  - [ ] Add entity highlighting and categorization in parsed output
+- [ ] AI suggestion system (AC: 3, 4)
+  - [ ] Implement intelligent auto-completion for business scenarios
+  - [ ] Create suggestion dropdown with common business patterns
+  - [ ] Add input validation with AI-powered completeness checking
+- [ ] Context management (AC: 5, 6)
+  - [ ] Implement conversation state management for multi-turn interactions
+  - [ ] Create context preservation across clarification sessions
+  - [ ] Add response time optimization with <2s initial parsing display
+
+**Dev Notes**:
+- **AI Integration**: Use OpenAI GPT-4 with business domain prompting via /api/nlp/parse-business-description
+- **Context Storage**: Maintain conversation state in React Query cache with BusinessRequirement model
+- **Speech Integration**: Web Speech API for voice input, graceful degradation for unsupported browsers
+- **Streaming**: WebSocket connection for real-time AI parsing feedback
+- **Key Files**: `client/src/components/nlp/NaturalLanguageInput.tsx`, `server/services/nlpService.ts`
+
+**Testing**:
+- **NLP Tests**: Business description parsing accuracy, entity extraction validation
+- **UI Tests**: Input interface responsiveness, streaming feedback display
+- **Voice Tests**: Speech-to-text functionality across browsers
+- **Performance Tests**: <2s parsing response time, confidence scoring accuracy
+
+---
+
+### Story 2.2: Business Requirements Extraction Engine
+**Status**: Draft  
+**Priority**: P0 (Critical - Core NLP)  
+**Estimate**: 8 story points
+
+**Story**: As a **System**, I want **to automatically extract structured requirements from natural language descriptions**, so that **I can generate complete business applications without manual configuration**.
+
+**Acceptance Criteria**:
+1. AI engine extracts workflow steps from descriptions ("document collection → background check → manager approval")
+2. System identifies form field requirements with proper data types and validation rules
+3. Engine recognizes approval chains, routing logic, and conditional business rules  
+4. AI extracts integration requirements (email, SMS, APIs) from business context automatically
+5. System maps business terminology to technical implementations with >90% accuracy
+6. Requirements extraction handles complex multi-step processes with parallel workflows
+7. Engine identifies where embedded AI chatbots should provide user guidance
+8. Structured output follows BusinessRequirement schema for application generation pipeline
+
+**Tasks / Subtasks**:
+- [ ] Core NLP extraction service (AC: 1, 2, 6)
+  - [ ] Implement OpenAI-powered requirement extraction with custom prompts
+  - [ ] Create workflow pattern recognition for sequential and parallel processes
+  - [ ] Add form field inference with data type and validation rule extraction
+- [ ] Business logic extraction (AC: 3, 4)
+  - [ ] Implement approval chain recognition with routing logic extraction
+  - [ ] Create integration requirement identification for external services
+  - [ ] Add conditional business rule extraction from natural language
+- [ ] Terminology mapping (AC: 5, 8)
+  - [ ] Create business-to-technical terminology mapping service
+  - [ ] Implement structured output generation following BusinessRequirement schema
+  - [ ] Add accuracy validation and confidence scoring for extracted requirements
+- [ ] AI assistance point identification (AC: 7)
+  - [ ] Implement AI chatbot placement recommendation engine
+  - [ ] Create guidance point identification for form assistance and process help
+  - [ ] Add contextual assistance mapping for embedded AI integration
+
+**Dev Notes**:
+- **NLP Service**: OpenAI GPT-4 with specialized business extraction prompts and function calling
+- **Schema Compliance**: Output must match BusinessRequirement model from shared/schema.ts
+- **Accuracy Validation**: Implement confidence scoring and requirement completeness checking
+- **Error Handling**: Graceful fallback to clarification requests for ambiguous inputs
+- **Key Files**: `server/services/nlpExtractionService.ts`, `server/utils/businessMappingService.ts`
+
+**Testing**:
+- **Extraction Tests**: Workflow pattern recognition accuracy, form field inference validation
+- **Business Logic Tests**: Approval chain extraction, integration requirement identification
+- **Schema Tests**: BusinessRequirement output compliance, structured data validation
+- **Accuracy Tests**: >90% terminology mapping accuracy, confidence scoring verification
+
+---
+
+### Story 2.3: AI-Powered Clarification System
+**Status**: Draft  
+**Priority**: P1 (High - UX Enhancement)  
+**Estimate**: 6 story points
+
+**Story**: As a **Business User**, I want **intelligent clarifying questions when my description is incomplete**, so that **generated applications accurately reflect my specific requirements**.
+
+**Acceptance Criteria**:
+1. System identifies requirement gaps and generates contextually relevant clarifying questions
+2. AI asks targeted questions based on business domain and detected process complexity
+3. Clarification interface provides examples and suggestions to guide user responses  
+4. System learns from responses to improve requirement understanding iteratively
+5. Clarification process averages <3 questions and completes within 5 minutes
+6. AI validates response consistency and asks follow-up questions for contradictions
+7. Users can preview understood requirements and modify before application generation
+8. Clarification system integrates with requirements refinement API endpoint
+
+**Tasks / Subtasks**:
+- [ ] Gap identification system (AC: 1, 2)
+  - [ ] Implement requirement completeness analysis using AI
+  - [ ] Create contextual question generation based on business domain knowledge
+  - [ ] Add process complexity assessment for targeted clarification
+- [ ] Interactive clarification UI (AC: 3, 7)
+  - [ ] Create clarification question interface with examples and suggestions
+  - [ ] Implement requirements preview component with modification capabilities
+  - [ ] Add visual requirement completeness indicators and progress tracking
+- [ ] Response validation (AC: 4, 6)
+  - [ ] Implement response consistency checking with contradiction detection
+  - [ ] Create iterative learning system for improved question generation
+  - [ ] Add follow-up question logic for ambiguous or inconsistent responses
+- [ ] Integration and optimization (AC: 5, 8)
+  - [ ] Connect to /api/nlp/requirements/{id}/refine endpoint
+  - [ ] Optimize question flow to average <3 questions per session
+  - [ ] Add session management for clarification state persistence
+
+**Dev Notes**:
+- **AI Integration**: OpenAI GPT-4 for intelligent question generation with domain-specific prompts
+- **API Integration**: Use requirements refinement endpoint for iterative improvement
+- **State Management**: React Query for clarification session state with persistence
+- **UX Optimization**: Progressive disclosure to avoid overwhelming users with questions
+- **Key Files**: `client/src/components/nlp/ClarificationInterface.tsx`, `server/services/clarificationService.ts`
+
+**Testing**:
+- **Question Tests**: Gap identification accuracy, contextual relevance of generated questions
+- **UX Tests**: <5 minute completion time, <3 questions average, user comprehension
+- **Validation Tests**: Consistency checking accuracy, contradiction detection reliability
+- **Integration Tests**: Requirements refinement API integration, state persistence
+
+---
+
+### Story 2.4: Requirements Validation & Confidence Scoring
+**Status**: Draft  
+**Priority**: P1 (High - Quality Assurance)  
+**Estimate**: 4 story points
+
+**Story**: As a **System Administrator**, I want **validated business requirements with confidence scoring**, so that **only high-quality requirements proceed to application generation**.
+
+**Acceptance Criteria**:
+1. AI validation system checks requirement completeness across all necessary components
+2. Confidence scoring evaluates extraction accuracy with >95% threshold for auto-approval
+3. System validates workflow feasibility and identifies potential implementation challenges
+4. Requirements validation includes business logic consistency and integration possibility checks
+5. Low-confidence requirements trigger additional clarification or expert review workflows
+6. Validation results display clear feedback on requirement quality and suggested improvements
+7. Admin interface shows validation metrics and confidence score distributions
+8. Requirements meeting validation criteria automatically proceed to application generation queue
+
+**Tasks / Subtasks**:
+- [ ] Validation engine implementation (AC: 1, 3, 4)
+  - [ ] Create requirement completeness validation across workflows, forms, integrations
+  - [ ] Implement workflow feasibility analysis for implementation complexity assessment
+  - [ ] Add business logic consistency checking and integration possibility validation
+- [ ] Confidence scoring system (AC: 2, 5)
+  - [ ] Implement AI confidence scoring with >95% threshold for auto-approval
+  - [ ] Create low-confidence requirement handling with review workflows
+  - [ ] Add confidence calibration based on historical generation success rates
+- [ ] Validation feedback UI (AC: 6, 8)
+  - [ ] Create validation results display with improvement suggestions
+  - [ ] Implement requirement quality indicators with actionable feedback
+  - [ ] Add automatic progression to generation queue for validated requirements
+- [ ] Admin monitoring (AC: 7)
+  - [ ] Create admin dashboard for validation metrics monitoring
+  - [ ] Implement confidence score distribution analytics
+  - [ ] Add validation performance tracking and quality improvement insights
+
+**Dev Notes**:
+- **Validation Logic**: AI-powered requirement analysis with business domain expertise
+- **Threshold Management**: Configurable confidence thresholds with A/B testing capabilities
+- **Queue Integration**: Automatic progression to /api/applications/generate for validated requirements
+- **Analytics**: Track validation accuracy and generation success correlation
+- **Key Files**: `server/services/requirementValidationService.ts`, `client/src/components/admin/ValidationDashboard.tsx`
+
+**Testing**:
+- **Validation Tests**: Completeness checking accuracy, feasibility analysis reliability
+- **Scoring Tests**: Confidence calibration accuracy, threshold optimization validation
+- **Flow Tests**: Auto-approval workflow, low-confidence review process
+- **Analytics Tests**: Metrics accuracy, dashboard functionality, performance tracking
+
+---
+
+## EPIC 3: AI Application Generation Engine
+
+### Story 3.1: Complete Application Generation Orchestrator
+**Status**: Draft  
+**Priority**: P0 (Critical - Core Generation)  
+**Estimate**: 10 story points
+
+**Story**: As a **Business User**, I want **complete business applications generated from my requirements**, so that **I receive working software with workflows, forms, integrations, and embedded AI assistants**.
+
+**Acceptance Criteria**:
+1. Application generation orchestrator creates complete business systems from BusinessRequirement input
+2. System generates React components, API endpoints, and database schemas as unified applications
+3. Generation process includes workflows, dynamic forms, external integrations, and embedded AI chatbots
+4. Generated applications deploy to unique URLs with full functionality within 15 minutes
+5. Generation status tracking shows real-time progress through each system component creation
+6. Error handling provides detailed feedback and recovery options for generation failures
+7. Generated code follows enterprise patterns with proper TypeScript types and error handling
+8. Applications include comprehensive documentation and user guides automatically
+
+**Tasks / Subtasks**:
+- [ ] Generation orchestrator service (AC: 1, 5)
+  - [ ] Implement application generation orchestration service
+  - [ ] Create real-time status tracking with WebSocket progress updates
+  - [ ] Add component generation coordination (workflows, forms, integrations, chatbots)
+- [ ] Code generation engine (AC: 2, 7)
+  - [ ] Implement React component generation with TypeScript and enterprise patterns
+  - [ ] Create API endpoint generation with proper routing and middleware
+  - [ ] Add database schema generation following Drizzle ORM patterns
+- [ ] System integration (AC: 3, 4)
+  - [ ] Integrate workflow, form, integration, and chatbot generation services
+  - [ ] Implement application deployment pipeline with unique URL generation
+  - [ ] Add 15-minute deployment timeline with progress milestones
+- [ ] Quality assurance (AC: 6, 8)
+  - [ ] Implement generation error handling with detailed feedback and recovery
+  - [ ] Create automatic documentation generation for generated applications
+  - [ ] Add code quality validation and enterprise pattern compliance checking
+
+**Dev Notes**:
+- **Generation Service**: Use OpenAI GPT-4 for code generation with enterprise TypeScript templates
+- **API Integration**: Connect to /api/applications/generate with GeneratedApplication schema output
+- **Deployment**: Replit deployment pipeline with unique subdomain assignment
+- **Status Tracking**: WebSocket-based progress updates with GenerationStatus enum
+- **Key Files**: `server/services/applicationGenerationService.ts`, `server/orchestration/generationOrchestrator.ts`
+
+**Testing**:
+- **Generation Tests**: Complete application creation, component integration validation
+- **Deployment Tests**: 15-minute deployment timeline, unique URL functionality
+- **Code Quality Tests**: TypeScript compliance, enterprise pattern adherence
+- **Error Handling Tests**: Generation failure recovery, detailed error feedback
+
+---
+
+### Story 3.2: Dynamic Workflow Generation System
+**Status**: Draft  
+**Priority**: P0 (Critical - Core Generation)  
+**Estimate**: 8 story points
+
+**Story**: As a **System**, I want **to generate multi-step business workflows with routing logic**, so that **generated applications handle complex business processes automatically**.
+
+**Acceptance Criteria**:
+1. Workflow generator creates sequential, parallel, and conditional workflow patterns from requirements
+2. System generates approval chains with role-based routing and escalation logic
+3. Generated workflows include automated notifications, reminders, and deadline management
+4. Workflow engine supports conditional branching based on form data and business rules
+5. Generated workflows integrate with external services for validation and data processing
+6. Workflow execution includes comprehensive audit trails and status tracking
+7. Generated workflow UI provides progress visualization and user task management
+8. Workflows support dynamic assignment and reassignment of tasks based on availability
+
+**Tasks / Subtasks**:
+- [ ] Workflow pattern generation (AC: 1, 2)
+  - [ ] Implement sequential workflow generation with step dependencies
+  - [ ] Create parallel workflow generation with synchronization points
+  - [ ] Add conditional workflow patterns with branching logic
+  - [ ] Generate approval chains with role-based routing and escalation
+- [ ] Business process automation (AC: 3, 5, 6)
+  - [ ] Implement automated notification and reminder systems
+  - [ ] Create deadline management with escalation triggers
+  - [ ] Add external service integration points for validation and processing
+  - [ ] Generate comprehensive audit trail and status tracking capabilities
+- [ ] Workflow UI generation (AC: 7, 8)
+  - [ ] Create workflow progress visualization components
+  - [ ] Generate user task management interfaces with assignment capabilities
+  - [ ] Implement dynamic task assignment based on user availability and roles
+- [ ] Integration with form and chatbot systems (AC: 4)
+  - [ ] Connect workflow engine with dynamic form generation
+  - [ ] Integrate embedded AI chatbots for workflow guidance
+  - [ ] Add conditional logic based on form data and AI-powered business rules
+
+**Dev Notes**:
+- **Workflow Engine**: Custom workflow execution engine with state machine patterns
+- **Integration**: Connect with form generation and chatbot embedding services
+- **UI Generation**: React components for workflow visualization and task management
+- **Business Rules**: AI-generated conditional logic with validation and routing
+- **Key Files**: `server/services/workflowGenerationService.ts`, `server/engines/workflowExecutionEngine.ts`
+
+**Testing**:
+- **Pattern Tests**: Sequential, parallel, and conditional workflow generation accuracy
+- **Process Tests**: Approval chain routing, notification systems, deadline management
+- **UI Tests**: Workflow visualization, task management interface functionality
+- **Integration Tests**: Form connectivity, chatbot integration, external service integration
+
+---
+
+### Story 3.3: Dynamic Form Generation System
+**Status**: Draft  
+**Priority**: P0 (Critical - Core Generation)  
+**Estimate**: 7 story points
+
+**Story**: As a **System**, I want **to generate intelligent forms with validation and conditional logic**, so that **generated applications collect data efficiently with embedded AI assistance**.
+
+**Acceptance Criteria**:
+1. Form generator creates dynamic forms with intelligent field types based on business context
+2. System generates comprehensive validation rules with custom business logic and error messages
+3. Generated forms include conditional field display based on user inputs and workflow state
+4. Form components integrate embedded AI chatbots for completion assistance and smart suggestions
+5. Generated forms support file uploads, digital signatures, and complex data types
+6. Form validation includes real-time AI-powered data quality checking and completeness scoring
+7. Generated form UI follows accessibility standards with proper ARIA labels and keyboard navigation
+8. Forms automatically save progress and support resumption with session persistence
+
+**Tasks / Subtasks**:
+- [ ] Form generation engine (AC: 1, 2)
+  - [ ] Implement intelligent form field generation with context-aware field types
+  - [ ] Create comprehensive validation rule generation with custom business logic
+  - [ ] Add intelligent error message generation for user-friendly feedback
+- [ ] Advanced form features (AC: 3, 5)
+  - [ ] Generate conditional field logic with dynamic show/hide based on inputs
+  - [ ] Implement file upload, digital signature, and complex data type support
+  - [ ] Create workflow state-based conditional display logic
+- [ ] AI integration (AC: 4, 6)
+  - [ ] Integrate embedded AI chatbots for form completion assistance
+  - [ ] Implement real-time AI-powered data quality checking
+  - [ ] Add smart suggestions and auto-completion based on business context
+- [ ] UX and accessibility (AC: 7, 8)
+  - [ ] Generate forms following WCAG AA accessibility standards
+  - [ ] Implement automatic progress saving with session persistence
+  - [ ] Add proper ARIA labels and keyboard navigation support
+
+**Dev Notes**:
+- **Form Generation**: AI-powered form creation using business requirement context
+- **Validation Engine**: Zod schemas with custom validation rules and AI-powered quality checks
+- **AI Integration**: OpenAI integration for completion assistance and smart suggestions
+- **Accessibility**: WCAG AA compliance with semantic HTML and proper ARIA implementation
+- **Key Files**: `server/services/formGenerationService.ts`, `client/src/components/generated/DynamicForm.tsx`
+
+**Testing**:
+- **Generation Tests**: Form field type accuracy, validation rule creation
+- **Feature Tests**: Conditional logic, file uploads, digital signatures
+- **AI Tests**: Chatbot integration, smart suggestions, data quality checking
+- **Accessibility Tests**: WCAG AA compliance, keyboard navigation, screen reader compatibility
+
+---
+
+### Story 3.4: Integration Generation System
+**Status**: Draft  
+**Priority**: P1 (High - Core Generation)  
+**Estimate**: 6 story points
+
+**Story**: As a **System**, I want **to generate external service integrations automatically**, so that **generated applications connect to email, SMS, APIs, and databases without manual configuration**.
+
+**Acceptance Criteria**:
+1. Integration generator creates email service connections with template generation and automation
+2. System generates SMS notification integrations with workflow-triggered messaging
+3. Generated applications include API integrations for background checks, document validation, and external data
+4. Integration system creates database connections with proper data mapping and synchronization
+5. Generated integrations include error handling, retry logic, and failure notification systems
+6. Integration endpoints support authentication methods (API keys, OAuth, webhooks) automatically
+7. Generated integrations provide comprehensive logging and monitoring capabilities
+8. Integration testing and validation occurs automatically during application generation
+
+**Tasks / Subtasks**:
+- [ ] Communication integrations (AC: 1, 2)
+  - [ ] Generate email service connections with template automation
+  - [ ] Create SMS notification integrations with workflow triggers
+  - [ ] Implement message template generation based on business context
+- [ ] External API integrations (AC: 3, 6)
+  - [ ] Generate background check service integrations with data mapping
+  - [ ] Create document validation API connections with proper error handling
+  - [ ] Implement authentication method selection (API keys, OAuth, webhooks)
+- [ ] Data integration (AC: 4, 5)
+  - [ ] Generate database connections with synchronization logic
+  - [ ] Create data mapping between internal and external systems
+  - [ ] Implement error handling, retry logic, and failure notifications
+- [ ] Monitoring and testing (AC: 7, 8)
+  - [ ] Generate integration logging and monitoring capabilities
+  - [ ] Create automatic integration testing during application generation
+  - [ ] Add integration health checks and status monitoring
+
+**Dev Notes**:
+- **Integration Templates**: Pre-built integration patterns for common business services
+- **Authentication**: Secure credential management using Replit Secrets integration
+- **Error Handling**: Robust retry logic and failure notification systems
+- **Testing**: Automated integration validation during generation process
+- **Key Files**: `server/services/integrationGenerationService.ts`, `server/integrations/integrationTemplates.ts`
+
+**Testing**:
+- **Integration Tests**: Email, SMS, and API connection generation accuracy
+- **Authentication Tests**: API key, OAuth, and webhook authentication setup
+- **Error Handling Tests**: Retry logic, failure notifications, error recovery
+- **Monitoring Tests**: Logging capabilities, health checks, status tracking
+
+---
+
+### Story 3.5: Embedded Chatbot Generation System
+**Status**: Draft  
+**Priority**: P0 (Critical - AI Integration)  
+**Estimate**: 9 story points
+
+**Story**: As a **System**, I want **to generate application-specific AI chatbots automatically**, so that **every generated application includes intelligent user assistance**.
+
+**Acceptance Criteria**:
+1. Chatbot generator creates application-specific AI assistants with contextual knowledge of workflows and forms
+2. Generated chatbots include capabilities for form assistance, process guidance, and action execution
+3. System generates chatbot personality and communication style appropriate for business context
+4. Generated chatbots integrate with application workflows to execute actions and validate data
+5. Chatbot generation includes trigger point identification for proactive assistance
+6. Generated chatbots access external integrations to perform business actions on behalf of users
+7. System creates chatbot UI components that integrate seamlessly with generated application interfaces
+8. Generated chatbots include learning capabilities to improve assistance based on user interactions
+
+**Tasks / Subtasks**:
+- [ ] Chatbot generation engine (AC: 1, 3)
+  - [ ] Implement application-specific chatbot creation with contextual knowledge injection
+  - [ ] Generate appropriate personality and communication style for business domain
+  - [ ] Create chatbot knowledge base from application workflows, forms, and business rules
+- [ ] Capability integration (AC: 2, 4)
+  - [ ] Generate form assistance capabilities with field-level help and validation
+  - [ ] Create process guidance features for workflow step assistance
+  - [ ] Implement action execution capabilities integrated with workflow engine
+- [ ] Proactive assistance (AC: 5, 6)
+  - [ ] Generate trigger point identification for proactive user assistance
+  - [ ] Create external integration access for business action execution
+  - [ ] Implement intelligent assistance timing based on user behavior patterns
+- [ ] UI and learning integration (AC: 7, 8)
+  - [ ] Generate chatbot UI components for seamless application integration
+  - [ ] Create learning capabilities for continuous assistance improvement
+  - [ ] Add user interaction tracking and feedback collection systems
+
+**Dev Notes**:
+- **AI Integration**: OpenAI GPT-4 and Claude integration for chatbot intelligence
+- **Context Management**: Application-specific knowledge injection using business requirements
+- **UI Generation**: React components for chatbot interfaces with customizable styling
+- **Learning System**: Interaction tracking and continuous improvement based on user feedback
+- **Key Files**: `server/services/chatbotGenerationService.ts`, `client/src/components/generated/EmbeddedChatbot.tsx`
+
+**Testing**:
+- **Generation Tests**: Chatbot creation accuracy, contextual knowledge injection
+- **Capability Tests**: Form assistance, process guidance, action execution
+- **Integration Tests**: UI component generation, workflow integration, external service access
+- **Learning Tests**: Continuous improvement, user feedback integration, assistance optimization
+
+---
+
+## EPIC 4: Embedded AI Chatbot System
+
+### Story 4.1: Real-time AI Assistance Framework
+**Status**: Draft  
+**Priority**: P0 (Critical - AI Assistance)  
+**Estimate**: 8 story points
+
+**Story**: As a **End User**, I want **real-time AI assistance within generated applications**, so that **I receive intelligent guidance through business processes with contextual help**.
+
+**Acceptance Criteria**:
+1. Real-time WebSocket connection enables instant AI responses with <500ms first token latency
+2. AI assistance framework provides contextual help based on current application state and user progress
+3. System maintains conversation context across multiple interactions within the same session
+4. AI assistance includes proactive suggestions when users spend >30 seconds on forms or processes
+5. Framework supports multiple concurrent chatbot sessions across different application areas
+6. Real-time assistance includes typing indicators, message status, and connection state management
+7. AI responses stream progressively with intermediate results displayed during generation
+8. System handles disconnections gracefully with offline message queuing and reconnection
+
+**Tasks / Subtasks**:
+- [ ] WebSocket infrastructure (AC: 1, 6, 8)
+  - [ ] Implement WebSocket server with <500ms first token latency optimization
+  - [ ] Create connection state management with typing indicators and message status
+  - [ ] Add graceful disconnection handling with offline message queuing
+- [ ] Contextual assistance engine (AC: 2, 4)
+  - [ ] Implement application state-aware AI assistance with context injection
+  - [ ] Create proactive suggestion system triggered after 30-second inactivity
+  - [ ] Add contextual help generation based on user progress and current screen
+- [ ] Session management (AC: 3, 5)
+  - [ ] Create conversation context preservation across interactions
+  - [ ] Implement multiple concurrent chatbot session support
+  - [ ] Add session isolation and state management for different application areas
+- [ ] Streaming and UX (AC: 7)
+  - [ ] Implement progressive response streaming with intermediate result display
+  - [ ] Create smooth UI updates during AI response generation
+  - [ ] Add response chunking and progressive enhancement for better UX
+
+**Dev Notes**:
+- **WebSocket Implementation**: ws library with connection pooling and state management
+- **AI Integration**: OpenAI streaming API with Claude fallback for complex assistance
+- **Context Storage**: Redis-like session storage for conversation context preservation
+- **Performance**: Optimize for <500ms response times with connection pre-warming
+- **Key Files**: `server/websocket/aiAssistanceSocket.ts`, `client/src/hooks/useRealtimeAssistance.ts`
+
+**Testing**:
+- **Performance Tests**: <500ms first token latency, streaming response optimization
+- **Connection Tests**: WebSocket reliability, disconnection handling, reconnection logic
+- **Context Tests**: Conversation preservation, multi-session support, state management
+- **UX Tests**: Proactive suggestions, typing indicators, progressive response display
+
+---
+
+### Story 4.2: Contextual Form Assistance System
+**Status**: Draft  
+**Priority**: P0 (Critical - Form UX)  
+**Estimate**: 6 story points
+
+**Story**: As a **End User**, I want **intelligent form completion assistance**, so that **I receive help with field validation, smart suggestions, and error resolution**.
+
+**Acceptance Criteria**:
+1. Form assistance provides field-level help with context-aware suggestions and examples
+2. AI validates form inputs in real-time with explanatory feedback and correction suggestions
+3. System offers smart auto-completion based on business context and previous user inputs
+4. Form assistance includes error resolution guidance with specific steps to fix validation issues
+5. AI suggests optimal field values based on business rules and data patterns
+6. Form assistance adapts to user skill level and provides progressive guidance
+7. System maintains form state and provides assistance during multi-step form processes
+8. Assistance includes accessibility support with screen reader compatible explanations
+
+**Tasks / Subtasks**:
+- [ ] Field-level assistance (AC: 1, 3)
+  - [ ] Implement context-aware field help with suggestions and examples
+  - [ ] Create smart auto-completion based on business context and user history
+  - [ ] Add field-level guidance tooltips and inline assistance
+- [ ] Validation and error assistance (AC: 2, 4)
+  - [ ] Create real-time validation with AI-powered explanatory feedback
+  - [ ] Implement error resolution guidance with step-by-step correction instructions
+  - [ ] Add validation rule explanation and business context for errors
+- [ ] Smart suggestions (AC: 5, 6)
+  - [ ] Generate optimal field value suggestions based on business rules
+  - [ ] Implement adaptive assistance based on user skill level and progress
+  - [ ] Create progressive guidance that escalates based on user struggles
+- [ ] Multi-step and accessibility (AC: 7, 8)
+  - [ ] Maintain form state and context across multi-step processes
+  - [ ] Add accessibility support with screen reader compatible assistance
+  - [ ] Create assistance state persistence during form navigation
+
+**Dev Notes**:
+- **AI Integration**: OpenAI for contextual suggestions and validation assistance
+- **Form Context**: Integration with generated form components for state awareness
+- **Accessibility**: WCAG AA compliance with ARIA live regions for dynamic assistance
+- **State Management**: Form state preservation with assistance context tracking
+- **Key Files**: `client/src/components/assistance/FormAssistance.tsx`, `server/services/formAssistanceService.ts`
+
+**Testing**:
+- **Assistance Tests**: Field-level help accuracy, smart suggestion relevance
+- **Validation Tests**: Real-time feedback quality, error resolution guidance effectiveness
+- **Accessibility Tests**: Screen reader compatibility, ARIA implementation
+- **State Tests**: Multi-step form assistance, context preservation across navigation
+
+---
+
+### Story 4.3: Process Guidance & Navigation System
+**Status**: Draft  
+**Priority**: P1 (High - Process UX)  
+**Estimate**: 5 story points
+
+**Story**: As a **End User**, I want **intelligent guidance through business processes**, so that **I understand workflow steps and receive contextual assistance during process execution**.
+
+**Acceptance Criteria**:
+1. Process guidance provides step-by-step workflow navigation with current progress indicators
+2. AI explains each process step with business context and expected outcomes
+3. System offers next-step suggestions and optimal path recommendations based on current state
+4. Process guidance includes deadline tracking with proactive reminders and escalation alerts
+5. AI provides troubleshooting assistance for common process issues and bottlenecks
+6. Guidance adapts to user role and provides role-specific instructions and capabilities
+7. System maintains process context across sessions with resumption capability
+8. Process guidance integrates with approval workflows and status notifications
+
+**Tasks / Subtasks**:
+- [ ] Process navigation (AC: 1, 3)
+  - [ ] Implement step-by-step workflow navigation with progress indicators
+  - [ ] Create next-step suggestions and optimal path recommendations
+  - [ ] Add workflow state visualization and current position tracking
+- [ ] Contextual explanation (AC: 2, 6)
+  - [ ] Generate business context explanations for each process step
+  - [ ] Implement role-specific guidance based on user permissions and capabilities
+  - [ ] Create expected outcome descriptions and success criteria for each step
+- [ ] Deadline and troubleshooting (AC: 4, 5)
+  - [ ] Add deadline tracking with proactive reminders and escalation alerts
+  - [ ] Implement troubleshooting assistance for common process issues
+  - [ ] Create bottleneck identification and resolution suggestions
+- [ ] Session and approval integration (AC: 7, 8)
+  - [ ] Maintain process context across sessions with resumption capability
+  - [ ] Integrate with approval workflows and status notification systems
+  - [ ] Add process state persistence and cross-session continuity
+
+**Dev Notes**:
+- **Process Engine**: Integration with workflow execution engine for state awareness
+- **AI Integration**: Contextual process explanation using business domain knowledge
+- **Role Management**: Integration with RBAC system for role-specific guidance
+- **Persistence**: Process context storage for cross-session continuity
+- **Key Files**: `client/src/components/assistance/ProcessGuidance.tsx`, `server/services/processGuidanceService.ts`
+
+**Testing**:
+- **Navigation Tests**: Step-by-step guidance accuracy, progress indicator functionality
+- **Context Tests**: Business explanation quality, role-specific instruction accuracy
+- **Integration Tests**: Workflow engine connectivity, approval system integration
+- **Persistence Tests**: Cross-session continuity, process state resumption
+
+---
+
+### Story 4.4: AI Action Execution System
+**Status**: Draft  
+**Priority**: P1 (High - Automation)  
+**Estimate**: 7 story points
+
+**Story**: As a **End User**, I want **AI assistants to execute business actions on my behalf**, so that **I can complete processes efficiently with automated email sending, task creation, and data updates**.
+
+**Acceptance Criteria**:
+1. AI action execution system performs email sending with template personalization and recipient management
+2. System creates and assigns tasks automatically based on workflow requirements and user permissions
+3. AI updates database records and business data with proper validation and audit trail logging
+4. Action execution includes confirmation prompts and user approval for sensitive operations
+5. System integrates with external APIs to perform document validation, background checks, and data synchronization
+6. AI action execution includes comprehensive error handling with rollback capabilities for failed operations
+7. Action system maintains detailed execution logs with timestamps and user attribution
+8. Execution system respects user permissions and role-based action restrictions
+
+**Tasks / Subtasks**:
+- [ ] Core action execution (AC: 1, 2, 3)
+  - [ ] Implement email sending with template personalization and recipient management
+  - [ ] Create automatic task creation and assignment based on workflow requirements
+  - [ ] Add database record updates with validation and audit trail logging
+- [ ] Safety and permissions (AC: 4, 8)
+  - [ ] Create confirmation prompts and user approval workflows for sensitive operations
+  - [ ] Implement role-based action restrictions and permission checking
+  - [ ] Add operation safety checks and business rule validation before execution
+- [ ] External integrations (AC: 5, 6)
+  - [ ] Integrate with external APIs for document validation and background checks
+  - [ ] Implement comprehensive error handling with rollback capabilities
+  - [ ] Add data synchronization with external systems and conflict resolution
+- [ ] Logging and monitoring (AC: 7)
+  - [ ] Create detailed execution logs with timestamps and user attribution
+  - [ ] Implement action performance monitoring and success rate tracking
+  - [ ] Add execution audit trail for compliance and troubleshooting
+
+**Dev Notes**:
+- **Action Framework**: Extensible action system with plugin architecture for business operations
+- **Permission Integration**: RBAC integration for secure action execution with proper authorization
+- **External APIs**: Integration with email services, task management, and external business APIs
+- **Audit System**: Comprehensive logging for compliance and operational monitoring
+- **Key Files**: `server/services/actionExecutionService.ts`, `server/actions/businessActionHandlers.ts`
+
+**Testing**:
+- **Execution Tests**: Email sending accuracy, task creation functionality, data update validation
+- **Security Tests**: Permission checking, confirmation workflows, sensitive operation handling
+- **Integration Tests**: External API connectivity, error handling, rollback capabilities
+- **Audit Tests**: Logging accuracy, execution tracking, compliance requirements
+
+---
+
+## EPIC 5: Business Process Automation & Template Creation
+
+### Story 5.1: Workflow Execution Engine
+**Status**: Draft  
+**Priority**: P0 (Critical - Process Automation)  
+**Estimate**: 9 story points
+
+**Story**: As a **System Administrator**, I want **robust workflow execution with intelligent routing**, so that **generated applications handle complex business processes automatically with AI-powered decision making**.
+
+**Acceptance Criteria**:
+1. Workflow execution engine processes sequential, parallel, and conditional workflows with state management
+2. System handles approval routing with role-based assignment and intelligent escalation logic
+3. Workflow engine includes deadline management with automated notifications and escalation triggers
+4. Execution system supports dynamic workflow modification during runtime based on business rules
+5. Engine provides comprehensive status tracking with real-time progress updates and user notifications
+6. Workflow execution includes error handling with automatic retry and human intervention capabilities
+7. System maintains detailed audit trails for compliance and troubleshooting with full execution history
+8. Execution engine scales to handle 1000+ concurrent workflow instances with <200ms response times
+
+**Tasks / Subtasks**:
+- [ ] Core execution engine (AC: 1, 8)
+  - [ ] Implement workflow state machine with sequential, parallel, and conditional logic
+  - [ ] Create high-performance execution engine supporting 1000+ concurrent instances
+  - [ ] Add workflow state persistence and recovery for system reliability
+- [ ] Approval and routing (AC: 2, 3)
+  - [ ] Implement role-based approval routing with intelligent assignment algorithms
+  - [ ] Create escalation logic with deadline management and automated notifications
+  - [ ] Add load balancing for approval distribution and availability checking
+- [ ] Dynamic workflow management (AC: 4, 5)
+  - [ ] Create runtime workflow modification capabilities with business rule integration
+  - [ ] Implement real-time status tracking with progress updates and user notifications
+  - [ ] Add dynamic routing based on form data and external system responses
+- [ ] Error handling and audit (AC: 6, 7)
+  - [ ] Implement comprehensive error handling with retry logic and human intervention
+  - [ ] Create detailed audit trail system with full execution history logging
+  - [ ] Add compliance reporting and troubleshooting capabilities
+
+**Dev Notes**:
+- **State Machine**: Robust workflow state management with persistence and recovery
+- **Performance**: Optimized for <200ms response times with connection pooling and caching
+- **Scalability**: Horizontal scaling support with load balancing and session management
+- **Compliance**: Detailed audit logging for enterprise compliance requirements
+- **Key Files**: `server/engines/workflowExecutionEngine.ts`, `server/services/approvalRoutingService.ts`
+
+**Testing**:
+- **Performance Tests**: 1000+ concurrent workflow support, <200ms response time validation
+- **Logic Tests**: Sequential, parallel, conditional workflow execution accuracy
+- **Routing Tests**: Approval assignment accuracy, escalation logic, deadline management
+- **Audit Tests**: Compliance logging, execution history, troubleshooting capability
+
+---
+
+### Story 5.2: Business Process Intelligence & Optimization
+**Status**: Draft  
+**Priority**: P1 (High - Process Intelligence)  
+**Estimate**: 6 story points
+
+**Story**: As a **Business Owner**, I want **AI-powered process intelligence and optimization**, so that **workflows continuously improve with bottleneck identification and efficiency recommendations**.
+
+**Acceptance Criteria**:
+1. Process intelligence system analyzes workflow execution patterns and identifies performance bottlenecks
+2. AI provides optimization recommendations for process improvement with specific actionable insights
+3. System tracks key performance indicators including completion rates, cycle times, and user satisfaction
+4. Intelligence engine identifies common failure points and suggests preventive measures
+5. Process optimization includes A/B testing capabilities for workflow improvements
+6. System generates executive reports with business impact metrics and ROI analysis
+7. Intelligence system learns from process variations to recommend best practices across applications
+8. Optimization engine provides real-time alerts for process anomalies and performance degradation
+
+**Tasks / Subtasks**:
+- [ ] Process analytics engine (AC: 1, 4)
+  - [ ] Implement workflow execution pattern analysis with bottleneck identification
+  - [ ] Create failure point analysis with root cause identification and prevention suggestions
+  - [ ] Add performance trend analysis and predictive modeling for process optimization
+- [ ] AI optimization recommendations (AC: 2, 7)
+  - [ ] Generate specific actionable insights for process improvement using AI analysis
+  - [ ] Implement cross-application learning for best practice identification
+  - [ ] Create optimization suggestion engine with business impact estimation
+- [ ] KPI tracking and testing (AC: 3, 5)
+  - [ ] Track completion rates, cycle times, user satisfaction, and business impact metrics
+  - [ ] Implement A/B testing framework for workflow improvement validation
+  - [ ] Create comparative analysis for optimization effectiveness measurement
+- [ ] Reporting and alerting (AC: 6, 8)
+  - [ ] Generate executive reports with ROI analysis and business impact metrics
+  - [ ] Implement real-time alerting for process anomalies and performance issues
+  - [ ] Create customizable dashboard for process intelligence visualization
+
+**Dev Notes**:
+- **Analytics Engine**: AI-powered analysis using historical execution data and pattern recognition
+- **Machine Learning**: Process optimization recommendations based on successful pattern identification
+- **Reporting**: Executive-level business impact reporting with ROI calculation
+- **Real-time Monitoring**: Anomaly detection and alert system for proactive process management
+- **Key Files**: `server/services/processIntelligenceService.ts`, `server/analytics/processOptimizationEngine.ts`
+
+**Testing**:
+- **Analytics Tests**: Bottleneck identification accuracy, performance pattern recognition
+- **Optimization Tests**: Recommendation quality, business impact accuracy, ROI calculation
+- **KPI Tests**: Metric tracking accuracy, A/B testing framework functionality
+- **Reporting Tests**: Executive report generation, real-time alerting, dashboard functionality
+
+---
+
+### Story 5.3: Template Generation & Management System
+**Status**: Draft  
+**Priority**: P1 (High - Scalability)  
+**Estimate**: 7 story points
+
+**Story**: As a **Platform Administrator**, I want **automatic template creation from successful applications**, so that **proven business solutions become reusable templates with embedded AI guidance**.
+
+**Acceptance Criteria**:
+1. Template generation system automatically converts successful applications into reusable templates
+2. System abstracts application-specific details while preserving core business logic and embedded AI capabilities
+3. Template parameterization allows customization of workflows, forms, and integrations for different contexts
+4. Generated templates include comprehensive documentation and deployment guides
+5. Template management system tracks usage analytics, success rates, and user feedback
+6. System provides template versioning with backwards compatibility and update management
+7. Template generation includes quality validation and enterprise compliance checking
+8. Generated templates maintain embedded AI assistance patterns and contextual knowledge
+
+**Tasks / Subtasks**:
+- [ ] Template generation engine (AC: 1, 2)
+  - [ ] Implement automatic application-to-template conversion with success criteria evaluation
+  - [ ] Create abstraction engine that preserves business logic while removing specific details
+  - [ ] Add embedded AI capability preservation during template creation
+- [ ] Parameterization system (AC: 3, 8)
+  - [ ] Create template customization framework for workflows, forms, and integrations
+  - [ ] Implement AI assistance pattern preservation with contextual knowledge adaptation
+  - [ ] Add parameter validation and constraint management for template customization
+- [ ] Documentation and validation (AC: 4, 7)
+  - [ ] Generate comprehensive template documentation and deployment guides automatically
+  - [ ] Implement quality validation and enterprise compliance checking for templates
+  - [ ] Create template testing and validation framework for reliability assurance
+- [ ] Management and analytics (AC: 5, 6)
+  - [ ] Create template usage analytics tracking with success rate and feedback collection
+  - [ ] Implement versioning system with backwards compatibility and update management
+  - [ ] Add template performance monitoring and continuous improvement capabilities
+
+**Dev Notes**:
+- **Template Engine**: AI-powered abstraction and parameterization with business logic preservation
+- **Documentation**: Automatic generation of deployment guides and usage documentation
+- **Analytics**: Comprehensive tracking of template usage, success rates, and optimization opportunities
+- **Version Management**: Git-like versioning with backwards compatibility and migration support
+- **Key Files**: `server/services/templateGenerationService.ts`, `server/management/templateManager.ts`
+
+**Testing**:
+- **Generation Tests**: Application-to-template conversion accuracy, abstraction quality
+- **Parameterization Tests**: Customization framework functionality, AI pattern preservation
+- **Validation Tests**: Quality checking accuracy, compliance verification
+- **Management Tests**: Analytics tracking, versioning system, update management
+
+---
+
+### Story 5.4: Analytics & Monitoring Dashboard
+**Status**: Draft  
+**Priority**: P1 (High - Monitoring)  
+**Estimate**: 5 story points
+
+**Story**: As a **Business Administrator**, I want **comprehensive analytics and monitoring**, so that **I can track platform performance, user engagement, and business value delivery**.
+
+**Acceptance Criteria**:
+1. Analytics dashboard displays platform usage metrics including application generation rates and user engagement
+2. System tracks business impact metrics including ROI, time savings, and productivity improvements
+3. Monitoring dashboard shows real-time system health with performance metrics and error rates
+4. Analytics include user journey tracking from onboarding through application deployment and usage
+5. Dashboard provides embedded AI effectiveness metrics including assistance usage and user satisfaction
+6. System generates automated reports for executive review with business impact summaries
+7. Monitoring includes predictive analytics for system scaling and resource planning
+8. Dashboard supports custom metric creation and alerting for business-specific KPIs
+
+**Tasks / Subtasks**:
+- [ ] Usage and business analytics (AC: 1, 2, 4)
+  - [ ] Implement platform usage tracking with application generation rates and user engagement
+  - [ ] Create business impact metrics tracking including ROI and productivity measurements
+  - [ ] Add user journey analytics from onboarding through deployment and ongoing usage
+- [ ] System monitoring (AC: 3, 7)
+  - [ ] Create real-time system health monitoring with performance metrics and error tracking
+  - [ ] Implement predictive analytics for system scaling and resource planning
+  - [ ] Add capacity planning and performance optimization recommendations
+- [ ] AI effectiveness tracking (AC: 5, 6)
+  - [ ] Track embedded AI assistance usage and effectiveness metrics
+  - [ ] Implement user satisfaction tracking for AI guidance and automation
+  - [ ] Generate executive reports with AI impact and business value summaries
+- [ ] Custom metrics and alerting (AC: 8)
+  - [ ] Create custom metric definition and tracking capabilities
+  - [ ] Implement flexible alerting system for business-specific KPIs
+  - [ ] Add dashboard customization for different user roles and requirements
+
+**Dev Notes**:
+- **Analytics Framework**: Comprehensive data collection and analysis with real-time processing
+- **Business Metrics**: ROI calculation and productivity measurement with baseline comparison
+- **AI Tracking**: Embedded AI usage patterns and effectiveness measurement
+- **Custom Dashboard**: Flexible visualization and alerting for business-specific requirements
+- **Key Files**: `client/src/components/analytics/AnalyticsDashboard.tsx`, `server/services/analyticsService.ts`
+
+**Testing**:
+- **Analytics Tests**: Usage metric accuracy, business impact calculation validation
+- **Monitoring Tests**: System health tracking, performance metric reliability
+- **AI Tests**: Assistance effectiveness measurement, satisfaction tracking accuracy
+- **Custom Tests**: Metric creation functionality, alerting system reliability
+
+---
+
 ## EPIC 3: Industry Template Gallery & AI Integration
 
 ### Story 3.1: Template Gallery Implementation
