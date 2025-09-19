@@ -29,6 +29,19 @@ import {
   type AuthorizedRequest 
 } from "./middleware/authorizationMiddleware";
 
+// Session typing for proper TypeScript support
+interface SessionWithPassport {
+  passport?: {
+    user?: {
+      id: string;
+      email: string;
+      first_name?: string;
+      last_name?: string;
+    };
+  };
+  [key: string]: any;
+}
+
 // Validation schemas for API requests (userId removed - derived from auth session)
 const parseBusinessDescriptionSchema = z.object({
   description: z.string()
@@ -308,6 +321,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Store the business requirement
       const businessRequirement = await storage.createBusinessRequirement({
         userId,
+        organizationId: req.organizationId!,
         originalDescription: description,
         extractedEntities,
         workflowPatterns,
@@ -709,6 +723,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create generated application record
       const generatedApp = await storage.createGeneratedApplication({
         businessRequirementId,
+        organizationId: businessRequirement.organizationId,
         name: generateApplicationName(businessRequirement.originalDescription),
         description: `Generated application: ${businessRequirement.originalDescription}`,
         status: "generating",
@@ -989,7 +1004,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     let matchingKey: string | null = null;
     let matchingEntry: any = null;
     
-    for (const [key, entry] of wsTokenStore.entries()) {
+    for (const [key, entry] of Array.from(wsTokenStore.entries())) {
       if (entry.sessionId === sessionId && 
           entry.endpoint === endpoint && 
           entry.token === providedToken && 
@@ -1099,7 +1114,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const decodedCookie = decodeURIComponent(rawSessionCookie);
         // Remove 's:' prefix and unsign with SESSION_SECRET
         if (decodedCookie.startsWith('s:')) {
-          sessionId = cookieSignature.unsign(decodedCookie.slice(2), process.env.SESSION_SECRET!);
+          const unsignedResult = cookieSignature.unsign(decodedCookie.slice(2), process.env.SESSION_SECRET!);
+          sessionId = unsignedResult || null;
         }
       } catch (error) {
         console.error('Failed to unsign session cookie:', error);

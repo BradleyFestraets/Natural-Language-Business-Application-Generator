@@ -33,6 +33,7 @@ export interface IStorage {
   createGeneratedApplication(application: InsertGeneratedApplication): Promise<GeneratedApplication>;
   updateGeneratedApplication(id: string, updates: Partial<InsertGeneratedApplication>): Promise<GeneratedApplication | undefined>;
   listGeneratedApplications(businessRequirementId?: string): Promise<GeneratedApplication[]>;
+  getGeneratedApplicationsByOrganization(organizationId: string): Promise<GeneratedApplication[]>;
   deleteGeneratedApplication(id: string): Promise<boolean>;
 
   // Embedded Chatbot operations
@@ -238,6 +239,12 @@ export class MemStorage implements IStorage {
     return applications.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
+  async getGeneratedApplicationsByOrganization(organizationId: string): Promise<GeneratedApplication[]> {
+    return Array.from(this.generatedApplications.values())
+      .filter(app => app.organizationId === organizationId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
   async deleteGeneratedApplication(id: string): Promise<boolean> {
     return this.generatedApplications.delete(id);
   }
@@ -356,7 +363,7 @@ export class MemStorage implements IStorage {
 
   async createOrganization(organizationData: InsertOrganization): Promise<Organization> {
     const organization: Organization = {
-      id: organizationData.id || randomUUID(),
+      id: randomUUID(),
       name: organizationData.name,
       subdomain: organizationData.subdomain || null,
       plan: organizationData.plan || "starter",
@@ -395,7 +402,7 @@ export class MemStorage implements IStorage {
 
   async addOrgMembership(membershipData: InsertOrgMembership): Promise<OrgMembership> {
     const membership: OrgMembership = {
-      id: membershipData.id || randomUUID(),
+      id: randomUUID(),
       organizationId: membershipData.organizationId,
       userId: membershipData.userId,
       role: membershipData.role,
