@@ -15,7 +15,7 @@ export default function NaturalLanguageInputPage() {
   // Streaming state
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingProgress, setStreamingProgress] = useState(0);
-  const [streamingStatus, setStreamingStatus] = useState<"analyzing" | "processing" | "completed" | "error" | null>(null);
+  const [streamingStatus, setStreamingStatus] = useState<"analyzing" | "processing" | "completed" | "error" | undefined>(undefined);
   const [streamingMessage, setStreamingMessage] = useState("");
   
   const { toast } = useToast();
@@ -231,7 +231,6 @@ export default function NaturalLanguageInputPage() {
             isStreaming={isStreaming}
             progress={streamingProgress}
             status={streamingStatus}
-            message={streamingMessage}
             onGenerateApplication={handleGenerateApplication}
           />
         </div>

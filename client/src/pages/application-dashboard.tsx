@@ -81,6 +81,9 @@ const mockRequirements = [
 
 export default function ApplicationDashboard() {
   const [activeTab, setActiveTab] = useState("applications");
+  // Add missing state variables to fix undefined errors
+  const [applications, setApplications] = useState(mockApplications);
+  const [selectedApp, setSelectedApp] = useState(mockApplications[0]);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -367,17 +370,17 @@ export default function ApplicationDashboard() {
             <CardContent>
               {/* selectedApp is not defined here, assuming it will be handled in a parent component or fetched */}
               {/* For demonstration, let's assume a default structure or conditionally render if selectedApp exists */}
-              {selectedApp && selectedApp.computerUse ? (
+              {selectedApp && (selectedApp as any).computerUse ? (
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {selectedApp.computerUse.capabilities?.map((capability: any, index: number) => (
+                    {(selectedApp as any).computerUse?.capabilities?.map((capability: any, index: number) => (
                       <Card key={index}>
                         <CardHeader>
                           <CardTitle className="text-sm">{capability.name}</CardTitle>
                           <CardDescription className="text-xs">
                             {capability.category} • {capability.businessContext}
                           </CardDescription>
-                        </Header>
+                        </CardHeader>
                         <CardContent>
                           <p className="text-sm text-gray-600 mb-3">{capability.description}</p>
                           <Badge variant="outline" className="text-xs">
@@ -388,14 +391,14 @@ export default function ApplicationDashboard() {
                     ))}
                   </div>
 
-                  {selectedApp.computerUse.setupInstructions && (
+                  {(selectedApp as any).computerUse?.setupInstructions && (
                     <Card>
                       <CardHeader>
                         <CardTitle className="text-sm">Setup Instructions</CardTitle>
                       </CardHeader>
                       <CardContent>
                         <pre className="text-xs bg-gray-50 p-3 rounded-md overflow-auto whitespace-pre-wrap">
-                          {selectedApp.computerUse.setupInstructions}
+                          {(selectedApp as any).computerUse?.setupInstructions}
                         </pre>
                       </CardContent>
                     </Card>
@@ -412,7 +415,7 @@ export default function ApplicationDashboard() {
 
         <TabsContent value="visual-assets" className="space-y-4">
           <VisualAssetViewer
-            businessRequirement={selectedApp?.businessRequirement} // Use optional chaining as selectedApp might be null initially
+            businessRequirement={(selectedApp as any)?.businessRequirement} // Use optional chaining as selectedApp might be null initially
             onAssetsGenerated={(assets) => {
               setApplications(prev =>
                 prev.map(app =>
