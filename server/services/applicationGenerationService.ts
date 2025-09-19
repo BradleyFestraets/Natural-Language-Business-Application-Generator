@@ -219,8 +219,6 @@ export class ApplicationGenerationService {
           workflowSystem.workflows,
           businessRequirement,
           {
-            includeRouting: true,
-            includeStateManagement: true,
             includeRealTimeUpdates: true,
             includeAccessControl: true,
             uiFramework: "react",
@@ -262,7 +260,8 @@ export class ApplicationGenerationService {
           apiEndpoints,
           databaseSchema,
           integrations,
-          documentation: workflows
+          workflows,
+          documentation: {}
         });
       }
 
@@ -279,6 +278,7 @@ export class ApplicationGenerationService {
         apiEndpoints,
         databaseSchema,
         integrations,
+        workflows,
         documentation
       });
 
@@ -301,8 +301,7 @@ export class ApplicationGenerationService {
         {
           components,
           apiEndpoints,
-          databaseSchema,
-          workflows
+          databaseSchema
         }
       );
 
