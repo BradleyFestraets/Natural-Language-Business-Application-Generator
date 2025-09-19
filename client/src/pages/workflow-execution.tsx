@@ -24,6 +24,7 @@ import {
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { type WorkflowExecution } from "@shared/schema";
+import { useWorkflowWebSocket } from "@/hooks/useWorkflowWebSocket";
 
 interface WorkflowStep {
   id: string;
@@ -81,6 +82,55 @@ export default function WorkflowExecution() {
     startedAt: rawExecution.startedAt || rawExecution.createdAt,
     context: rawExecution.context || {}
   } : null;
+
+  // WebSocket connection for real-time progress updates
+  const { isConnected: wsConnected, lastMessage } = useWorkflowWebSocket(
+    executionId || null,
+    {
+      onProgress: (progressData) => {
+        // Invalidate queries to refresh data when progress updates are received
+        queryClient.invalidateQueries({ queryKey: ["/api/workflows/executions", executionId] });
+        
+        // Show toast notification for significant progress updates
+        if (progressData.message && progressData.progress !== undefined) {
+          toast({
+            title: "Workflow Progress",
+            description: `${progressData.message} (${progressData.progress}%)`,
+          });
+        }
+      },
+      onStatusChange: (status) => {
+        // Invalidate queries when status changes
+        queryClient.invalidateQueries({ queryKey: ["/api/workflows/executions", executionId] });
+        queryClient.invalidateQueries({ queryKey: ["/api/workflows/executions/active"] });
+        
+        // Show status change notifications
+        const statusMessages = {
+          'completed': 'Workflow completed successfully!',
+          'failed': 'Workflow execution failed',
+          'cancelled': 'Workflow was cancelled',
+        };
+        
+        const message = statusMessages[status as keyof typeof statusMessages];
+        if (message) {
+          toast({
+            title: "Workflow Status Update",
+            description: message,
+            variant: status === 'failed' ? 'destructive' : 'default',
+          });
+        }
+      },
+      onError: (error) => {
+        console.error('WebSocket error:', error);
+        toast({
+          title: "Connection Error",
+          description: "Lost connection to real-time updates",
+          variant: "destructive",
+        });
+      },
+      enabled: !!executionId && !!execution
+    }
+  );
 
   const form = useForm<StepActionForm>({
     resolver: zodResolver(stepActionSchema),
