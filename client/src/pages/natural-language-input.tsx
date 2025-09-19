@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { isUnauthorizedError } from "@/lib/authUtils";
+import { useEnhancedToast } from "@/hooks/useEnhancedToast";
+import { useGlobalLoading } from "@/hooks/useGlobalLoading";
 import NaturalLanguageInput from "@/components/nlp/NaturalLanguageInput";
 import RequirementVisualization from "@/components/nlp/RequirementVisualization";
 
@@ -18,17 +19,16 @@ export default function NaturalLanguageInputPage() {
   const [streamingStatus, setStreamingStatus] = useState<"analyzing" | "processing" | "completed" | "error" | undefined>(undefined);
   const [streamingMessage, setStreamingMessage] = useState("");
   
-  const { toast } = useToast();
+  const toast = useEnhancedToast();
   const { isAuthenticated, isLoading } = useAuth();
+  const { startLoading, stopLoading, updateProgress } = useGlobalLoading();
   const websocketRef = useRef<WebSocket | null>(null);
 
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      toast({
-        title: "Authentication Required",
+      toast.error("Authentication Required", {
         description: "You need to log in to use this application.",
-        variant: "destructive",
       });
       setTimeout(() => {
         window.location.href = "/api/login";
@@ -108,10 +108,8 @@ export default function NaturalLanguageInputPage() {
     ws.onerror = (error) => {
       console.error('WebSocket error:', error);
       setIsStreaming(false);
-      toast({
-        title: "Connection Error",
+      toast.error("Connection Error", {
         description: "Lost connection to real-time analysis updates.",
-        variant: "destructive"
       });
     };
     
