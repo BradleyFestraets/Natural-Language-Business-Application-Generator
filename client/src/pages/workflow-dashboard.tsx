@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Link, useLocation } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
 import { Play, Pause, Settings, Users, Clock, AlertCircle } from "lucide-react";
 
 interface WorkflowExecution {
@@ -31,8 +32,25 @@ interface WorkflowPattern {
   completedToday: number;
 }
 
+interface GeneratedApplication {
+  id: string;
+  name: string;
+  description: string;
+  status: "pending" | "generating" | "completed" | "failed";
+  completionPercentage: number;
+  organizationId: string;
+  businessRequirementId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface StartWorkflowResponse {
+  executionId: string;
+}
+
 export default function WorkflowDashboard() {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
   
   // Fetch workflow patterns
   const { data: workflows = [], isLoading: workflowsLoading } = useQuery<WorkflowPattern[]>({
@@ -46,27 +64,55 @@ export default function WorkflowDashboard() {
     enabled: true
   });
 
-  // Start workflow mutation
+  // Fetch user's generated applications for organization context
+  const { data: applications = [], isLoading: applicationsLoading } = useQuery<GeneratedApplication[]>({
+    queryKey: ["/api/applications/dashboard"],
+    enabled: true
+  });
+
+  // Start workflow mutation with proper application ID
   const startWorkflowMutation = useMutation({
-    mutationFn: async (workflowId: string) => {
-      return apiRequest(`/api/workflows/executions/start`, {
-        method: "POST",
-        body: JSON.stringify({ 
-          applicationId: "temp-app-id", // TODO: Get from context
-          workflowId 
-        })
+    mutationFn: async ({ workflowId, applicationId }: { workflowId: string; applicationId: string }): Promise<StartWorkflowResponse> => {
+      const response = await apiRequest("POST", "/api/workflows/executions/start", {
+        applicationId,
+        workflowId 
       });
+      return response.json();
     },
-    onSuccess: (result: any) => {
+    onSuccess: (result: StartWorkflowResponse) => {
+      // Invalidate active executions to refresh dashboard
+      queryClient.invalidateQueries({ queryKey: ["/api/workflows/executions/active"] });
+      
+      toast({
+        title: "Workflow Started",
+        description: "Successfully started workflow execution",
+      });
       setLocation(`/workflows/executions/${result.executionId}`);
     },
     onError: (error: any) => {
       console.error("Failed to start workflow:", error);
+      toast({
+        title: "Failed to Start Workflow",
+        description: "Unable to start workflow execution. Please try again.",
+        variant: "destructive",
+      });
     }
   });
 
   const handleStartWorkflow = async (workflowId: string) => {
-    startWorkflowMutation.mutate(workflowId);
+    // Get the first available application ID from completed applications
+    const availableApps = applications.filter(app => app.status === "completed");
+    if (availableApps.length === 0) {
+      toast({
+        title: "No Applications Available",
+        description: "You need to generate a completed application before starting workflows.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    const applicationId = availableApps[0].id;
+    startWorkflowMutation.mutate({ workflowId, applicationId });
   };
 
   const handleViewExecution = (executionId: string) => {
@@ -92,7 +138,7 @@ export default function WorkflowDashboard() {
     }
   };
 
-  if (workflowsLoading || executionsLoading) {
+  if (workflowsLoading || executionsLoading || applicationsLoading) {
     return (
       <div className="container mx-auto p-6 space-y-6">
         <div className="space-y-2">
@@ -307,10 +353,11 @@ export default function WorkflowDashboard() {
                   <Button 
                     className="w-full" 
                     onClick={() => handleStartWorkflow(workflow.id)}
+                    disabled={startWorkflowMutation.isPending || applications.filter(app => app.status === "completed").length === 0}
                     data-testid={`button-start-workflow-${workflow.id}`}
                   >
                     <Play className="w-4 h-4 mr-2" />
-                    Start Workflow
+                    {startWorkflowMutation.isPending ? "Starting..." : "Start Workflow"}
                   </Button>
                 </CardContent>
               </Card>

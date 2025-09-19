@@ -947,52 +947,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Set up WebSocket server for real-time updates
   const wss = new WebSocketServer({ server: httpServer });
 
-  // SECURITY CRITICAL: WebSocket CSRF Token Management
-  const wsTokenStore = new Map<string, { token: string, createdAt: Date, sessionId: string }>();
+  // SECURITY CRITICAL: Enhanced WebSocket CSRF Token Management with endpoint binding
+  const wsTokenStore = new Map<string, { token: string, endpoint: string, createdAt: Date, sessionId: string, used: boolean }>();
   
-  // Generate anti-CSRF token for WebSocket connections
-  const generateWSCSRFToken = (sessionId: string): string => {
+  // Generate anti-CSRF token for specific WebSocket endpoint
+  const generateWSCSRFToken = (sessionId: string, endpoint: string = 'default'): string => {
     const token = require('crypto').randomBytes(32).toString('hex');
-    wsTokenStore.set(sessionId, {
+    const nonce = require('crypto').randomBytes(8).toString('hex');
+    const tokenKey = `${sessionId}:${endpoint}:${nonce}`;
+    
+    wsTokenStore.set(tokenKey, {
       token,
+      endpoint,
       createdAt: new Date(),
-      sessionId
+      sessionId,
+      used: false
     });
     
-    // Clean up expired tokens (older than 5 minutes)
+    // Clean up expired tokens (older than 2 minutes)
     setTimeout(() => {
-      wsTokenStore.delete(sessionId);
-    }, 5 * 60 * 1000);
+      wsTokenStore.delete(tokenKey);
+    }, 2 * 60 * 1000);
     
     return token;
   };
   
-  // SECURITY CRITICAL: Enhanced WebSocket CSRF token validation - single-use, endpoint-bound
+  // SECURITY CRITICAL: True endpoint-bound WebSocket CSRF token validation
   const validateWSCSRFToken = (sessionId: string, providedToken: string, endpoint: string): boolean => {
-    const stored = wsTokenStore.get(sessionId);
-    if (!stored) return false;
+    // Find matching token for this session, endpoint, and token value
+    let matchingKey: string | null = null;
+    let matchingEntry: any = null;
     
-    // Check token age (2 minute TTL for bank-grade security)
-    const age = Date.now() - stored.createdAt.getTime();
-    if (age > 2 * 60 * 1000) {
-      wsTokenStore.delete(sessionId);
+    for (const [key, entry] of wsTokenStore.entries()) {
+      if (entry.sessionId === sessionId && 
+          entry.endpoint === endpoint && 
+          entry.token === providedToken && 
+          !entry.used) {
+        matchingKey = key;
+        matchingEntry = entry;
+        break;
+      }
+    }
+    
+    if (!matchingKey || !matchingEntry) {
       return false;
     }
     
-    // Verify token and endpoint binding
-    const isValid = stored.token === providedToken;
+    // Check token age (2 minute TTL for bank-grade security)
+    const age = Date.now() - matchingEntry.createdAt.getTime();
+    if (age > 2 * 60 * 1000) {
+      wsTokenStore.delete(matchingKey);
+      return false;
+    }
     
-    // BANK-GRADE: Single-use token - delete after first validation attempt
-    wsTokenStore.delete(sessionId);
+    // BANK-GRADE: Single-use token - mark as used and delete
+    wsTokenStore.delete(matchingKey);
     
-    return isValid;
+    return true;
   };
 
-  // Endpoint to get WebSocket CSRF token
+  // Endpoint to get WebSocket CSRF token for specific endpoint
   app.get("/api/auth/ws-csrf-token", isAuthenticated, (req: any, res: Response) => {
     const sessionId = req.sessionID;
-    const token = generateWSCSRFToken(sessionId);
-    res.json({ wscsrfToken: token });
+    const endpoint = req.query.endpoint as string || 'default';
+    const token = generateWSCSRFToken(sessionId, endpoint);
+    res.json({ wscsrfToken: token, endpoint });
   });
 
   // SECURITY CRITICAL: Use the same session store as HTTP for consistency
@@ -1103,52 +1122,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const analysisSessionId = pathname.split("/").pop();
       
       if (!analysisSessionId) {
-        socket.destroy();
-        return;
-      }
-      
-      // Authenticate WebSocket connection
-      if (!sessionId) {
-        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+        socket.write('HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\n\r\nInvalid analysis session ID');
         socket.destroy();
         return;
       }
       
       try {
-        // SECURITY CRITICAL: Extract user session and organization for authorization
-        const session = await new Promise((resolve) => {
-          sessionStore.get(sessionId, (err: any, session: any) => {
-            resolve(err ? null : session);
-          });
-        });
-        
-        if (!session?.passport?.user) {
-          socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
-          socket.destroy();
-          return;
-        }
-        
         const userId = session.passport.user.id;
         
-        // SECURITY CRITICAL: Verify ownership of the specific analysis session
+        // SECURITY CRITICAL: Verify ownership of the specific analysis session BEFORE WebSocket upgrade
         const sessionMetadata = nlpAnalysisService.getSessionMetadata(analysisSessionId);
         if (!sessionMetadata) {
-          socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
+          socket.write('HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\n\r\nAnalysis session not found');
           socket.destroy();
           return;
         }
         
-        // SECURITY CRITICAL: Verify user and organization ownership of the analysis session
+        // BANK-GRADE: Verify user and organization ownership of the analysis session
         if (!nlpAnalysisService.verifySessionOwnership(analysisSessionId, userId, sessionMetadata.organizationId)) {
-          socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+          console.warn(`WebSocket: Unauthorized access attempt to analysis session ${analysisSessionId} by user ${userId}`);
+          socket.write('HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\n\r\nAccess denied to analysis session');
           socket.destroy();
           return;
         }
         
-        // Additional verification: ensure user still has organization membership
+        // BANK-GRADE: Verify user still has organization membership for the specific resource
         const hasOrgAccess = await storage.hasOrgMembership(userId, sessionMetadata.organizationId);
         if (!hasOrgAccess) {
-          socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+          console.warn(`WebSocket: User ${userId} no longer has access to organization ${sessionMetadata.organizationId}`);
+          socket.write('HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\n\r\nOrganization access revoked');
           socket.destroy();
           return;
         }
