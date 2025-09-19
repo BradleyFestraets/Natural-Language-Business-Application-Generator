@@ -4,13 +4,14 @@ import { WebSocketServer } from "ws";
 import url from "url";
 import { storage } from "./storage";
 import { z } from "zod";
-import { insertBusinessRequirementSchema, insertGeneratedApplicationSchema, insertEmbeddedChatbotSchema } from "@shared/schema";
+import { insertBusinessRequirementSchema, insertGeneratedApplicationSchema, insertEmbeddedChatbotSchema, insertChatInteractionSchema } from "@shared/schema";
 import { NLPService } from "./services/nlpService.js";
 import { ClarificationService } from "./services/clarificationService";
 import { ApplicationGenerationService } from "./services/applicationGenerationService";
 import { WorkflowGenerationService } from "./services/workflowGenerationService";
 import { getWorkflowExecutionEngine } from "./engines/workflowExecutionEngineInstance";
 import { nlpAnalysisService } from "./services/nlpAnalysisService";
+import { embeddedChatbotService } from "./services/embeddedChatbotService";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { registerWorkflowRoutes } from "./workflowRoutes";
 import session from "express-session";
@@ -839,21 +840,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ===== CHATBOT ENDPOINTS =====
   
   // Create embedded chatbot for generated application
-  app.post("/api/chatbot/create", isAuthenticated, async (req: any, res: Response) => {
+  app.post("/api/chatbot/create", isAuthenticated, requireOrganization, requireAIServiceMiddleware, async (req: AuthorizedRequest, res: Response) => {
     try {
-      const validatedData = insertEmbeddedChatbotSchema.parse(req.body);
+      const { generatedApplicationId, capabilities, personality } = req.body;
       
-      const chatbot = await storage.createEmbeddedChatbot(validatedData);
+      // Verify the application exists and belongs to user's organization
+      const application = await storage.getGeneratedApplication(generatedApplicationId);
+      if (!application) {
+        return res.status(404).json({ message: "Generated application not found" });
+      }
+      
+      // Security: Verify organization access to the application
+      const hasOrgAccess = await storage.hasOrgMembership(req.user.claims.sub, application.organizationId);
+      if (!hasOrgAccess || application.organizationId !== req.organizationId) {
+        return res.status(403).json({ message: "Access denied to this application" });
+      }
+      
+      // Get the business requirement for context
+      const businessRequirement = await storage.getBusinessRequirement(application.businessRequirementId);
+      if (!businessRequirement) {
+        return res.status(400).json({ message: "Business requirement not found for application" });
+      }
+      
+      // Use EmbeddedChatbotService to create intelligent chatbot
+      const chatbot = await embeddedChatbotService.createEmbeddedChatbot(
+        generatedApplicationId,
+        businessRequirement,
+        capabilities || [],
+        personality || { tone: 'professional', style: 'business', proactiveness: 'medium', expertiseLevel: 'intermediate' }
+      );
       
       res.status(201).json({
         chatbotId: chatbot.id,
         name: chatbot.name,
         capabilities: chatbot.capabilities,
         isActive: chatbot.isActive,
-        aiModel: chatbot.aiModel
+        aiModel: chatbot.aiModel,
+        generatedApplicationId: chatbot.generatedApplicationId
       });
       
     } catch (error) {
+      console.error('Chatbot creation error:', error);
       if (error instanceof z.ZodError) {
         res.status(400).json({ message: error.errors[0].message });
       } else {
@@ -863,11 +890,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Handle chatbot interactions
-  app.post("/api/chatbot/interact", isAuthenticated, async (req: any, res: Response) => {
+  app.post("/api/chatbot/interact", isAuthenticated, requireAIServiceMiddleware, async (req: any, res: Response) => {
     try {
       const validatedData = chatbotInteractionSchema.parse(req.body);
       const { chatbotId, message, sessionId } = validatedData;
-      const userId = req.user.claims.sub; // Derive userId from authenticated session
+      const userId = req.user.claims.sub;
       
       const chatbot = await storage.getEmbeddedChatbot(chatbotId);
       if (!chatbot) {
@@ -878,19 +905,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Chatbot is not active" });
       }
       
-      // TODO: Integrate with OpenAI for actual chatbot response
-      const mockResponse = generateChatbotResponse(message, chatbot);
-      const newSessionId = sessionId || `session-${Date.now()}`;
+      // Build context for the chatbot
+      const context = {
+        generatedApplicationId: chatbot.generatedApplicationId,
+        currentPage: req.body.currentPage || 'main',
+        userRole: req.body.userRole || 'user',
+        workflowState: req.body.workflowState || 'active',
+        formState: req.body.formState || {},
+        sessionData: req.body.sessionData || {}
+      };
+      
+      // Use the EmbeddedChatbotService for intelligent responses
+      const response = await embeddedChatbotService.processMessage(
+        chatbotId,
+        message,
+        context,
+        userId
+      );
       
       res.status(200).json({
-        response: mockResponse,
-        sessionId: newSessionId,
+        response: response.message,
+        suggestedActions: response.suggestedActions || [],
+        sessionId: sessionId || `session-${Date.now()}`,
         timestamp: new Date().toISOString(),
         chatbotId,
         aiModel: chatbot.aiModel
       });
       
     } catch (error) {
+      console.error('Chatbot interaction error:', error);
       if (error instanceof z.ZodError) {
         res.status(400).json({ message: error.errors[0].message });
       } else {
@@ -1399,16 +1442,136 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     // Handle embedded chatbot WebSocket connections
     else if (pathname?.startsWith("/ws/chatbot/")) {
-      // Basic authentication check for chatbot connections
-      if (!sessionId) {
-        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+      const chatbotId = pathname.split("/").pop();
+      
+      if (!chatbotId || !sessionId) {
+        socket.write('HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\n\r\nInvalid chatbot ID or session');
         socket.destroy();
         return;
       }
       
-      wss.handleUpgrade(request, socket, head, (ws) => {
-        wss.emit("connection", ws, request);
-      });
+      try {
+        // SECURITY CRITICAL: Verify session and authorization
+        const session = await new Promise((resolve) => {
+          sessionStore.get(sessionId, (err, session) => {
+            resolve(err ? null : session);
+          });
+        });
+        
+        if (!session?.passport?.user) {
+          socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+          socket.destroy();
+          return;
+        }
+        
+        const userId = session.passport.user.id;
+        
+        // Verify chatbot exists and user has access
+        const chatbot = await storage.getEmbeddedChatbot(chatbotId);
+        if (!chatbot) {
+          socket.write('HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\n\r\nChatbot not found');
+          socket.destroy();
+          return;
+        }
+        
+        // Verify application access through organization membership
+        const application = await storage.getGeneratedApplication(chatbot.generatedApplicationId);
+        if (!application) {
+          socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+          socket.destroy();
+          return;
+        }
+        
+        // SECURITY CRITICAL: Verify organization access
+        const hasOrgAccess = await storage.hasOrgMembership(userId, application.organizationId);
+        if (!hasOrgAccess) {
+          socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+          socket.destroy();
+          return;
+        }
+        
+        // Proceed with WebSocket upgrade for authenticated chatbot connections
+        wss.handleUpgrade(request, socket, head, (ws) => {
+          console.log(`WebSocket client connected to chatbot ${chatbotId} for user ${userId}`);
+          
+          // Register client with EmbeddedChatbotService for real-time updates
+          embeddedChatbotService.registerClient(chatbotId, ws);
+          
+          // Handle incoming messages for real-time chat
+          ws.on('message', async (message) => {
+            try {
+              const data = JSON.parse(message.toString());
+              
+              if (data.type === 'ping') {
+                ws.send(JSON.stringify({ type: 'pong' }));
+                return;
+              }
+              
+              if (data.type === 'chat_message' && data.message) {
+                // Build context from WebSocket message
+                const context = {
+                  generatedApplicationId: chatbot.generatedApplicationId,
+                  currentPage: data.context?.currentPage || 'main',
+                  userRole: data.context?.userRole || 'user', 
+                  workflowState: data.context?.workflowState || 'active',
+                  formState: data.context?.formState || {},
+                  sessionData: data.context?.sessionData || {}
+                };
+                
+                // Process message through EmbeddedChatbotService
+                const response = await embeddedChatbotService.processMessage(
+                  chatbotId,
+                  data.message,
+                  context,
+                  userId
+                );
+                
+                // Send response back via WebSocket
+                ws.send(JSON.stringify({
+                  type: 'chat_response',
+                  chatbotId,
+                  message: response.message,
+                  suggestedActions: response.suggestedActions || [],
+                  timestamp: new Date().toISOString(),
+                  messageId: data.messageId || null
+                }));
+              }
+            } catch (error) {
+              console.error(`WebSocket message error for chatbot ${chatbotId}:`, error);
+              ws.send(JSON.stringify({
+                type: 'error',
+                message: 'Failed to process message',
+                timestamp: new Date().toISOString()
+              }));
+            }
+          });
+          
+          ws.on('close', () => {
+            console.log(`WebSocket client disconnected from chatbot ${chatbotId}`);
+            embeddedChatbotService.unregisterClient(chatbotId, ws);
+          });
+          
+          ws.on('error', (error) => {
+            console.error(`WebSocket error for chatbot ${chatbotId}:`, error);
+            embeddedChatbotService.unregisterClient(chatbotId, ws);
+          });
+          
+          // Send connection confirmation
+          ws.send(JSON.stringify({
+            type: 'connected',
+            chatbotId,
+            message: 'Connected to AI chatbot',
+            capabilities: chatbot.capabilities,
+            timestamp: new Date().toISOString()
+          }));
+        });
+        
+      } catch (error) {
+        console.error('WebSocket chatbot connection error:', error);
+        socket.write('HTTP/1.1 500 Internal Server Error\r\n\r\n');
+        socket.destroy();
+      }
+      return;
     }
     else {
       socket.destroy();
