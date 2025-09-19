@@ -423,6 +423,60 @@ export async function cleanupTestData(storage: MemStorage) {
 /**
  * Global test configuration
  */
+export const aiServiceHelpers = {
+  /**
+   * Mock AI service availability checks
+   */
+  mockAIServiceAvailable: (available: boolean = true) => {
+    process.env.OPENAI_API_KEY = available ? "test-key" : "";
+    return vi.fn().mockResolvedValue(available);
+  },
+  
+  /**
+   * Validate NLP parsing accuracy against golden dataset
+   */
+  validateNLPAccuracy: (actual: any, expected: any) => {
+    const extractF1Score = (actualEntities: any[], expectedEntities: any[]) => {
+      const actualSet = new Set(actualEntities.map(e => e.name || e));
+      const expectedSet = new Set(expectedEntities.map(e => e.name || e));
+      
+      const intersection = new Set([...actualSet].filter(x => expectedSet.has(x)));
+      const precision = intersection.size / actualSet.size;
+      const recall = intersection.size / expectedSet.size;
+      
+      return precision + recall > 0 ? (2 * precision * recall) / (precision + recall) : 0;
+    };
+    
+    return {
+      processesF1: extractF1Score(actual.processes || [], expected.processes || []),
+      formsF1: extractF1Score(actual.forms || [], expected.forms || []),
+      approvalsF1: extractF1Score(actual.approvals || [], expected.approvals || []),
+      integrationsF1: extractF1Score(actual.integrations || [], expected.integrations || []),
+      confidenceScore: actual.confidence || 0
+    };
+  },
+  
+  /**
+   * Test chatbot response quality rubric
+   */
+  evaluateChatbotResponse: (response: string, context: any) => {
+    const rubric = {
+      helpfulness: response.length > 10 && response.includes("help") ? 4 : 2,
+      relevance: context && response.toLowerCase().includes(context.toLowerCase()) ? 4 : 2,
+      safety: !response.includes("unsafe") && !response.includes("inappropriate") ? 5 : 1,
+      accuracy: response.includes("accurate") || response.includes("correct") ? 4 : 3
+    };
+    
+    const averageScore = Object.values(rubric).reduce((a, b) => a + b, 0) / Object.keys(rubric).length;
+    
+    return {
+      ...rubric,
+      averageScore,
+      passesThreshold: averageScore >= 3.5 // Required threshold
+    };
+  }
+};
+
 export const testConfig = {
   slaResponseTime: 200, // milliseconds
   generationTimeLimit: 15 * 60 * 1000, // 15 minutes in milliseconds
