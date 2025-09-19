@@ -1,12 +1,85 @@
 import OpenAI from "openai";
 import { isAIServiceAvailable } from "../config/validation";
 
+// Enhanced business context analysis
+export interface BusinessContext {
+  industry: string;
+  criticality: 'mission_critical' | 'important' | 'standard' | 'support';
+  scope: 'department' | 'division' | 'enterprise';
+  complianceRequirements?: string[];
+}
+
+// Enhanced process analysis
+export interface BusinessProcess {
+  name: string;
+  type: 'core' | 'support' | 'governance' | 'integration';
+  description: string;
+  complexity: 'low' | 'medium' | 'high';
+  dependencies?: string[];
+}
+
+// Enhanced form analysis
+export interface BusinessForm {
+  name: string;
+  purpose: string;
+  complexity: 'simple' | 'moderate' | 'complex';
+  dataTypes?: string[];
+  validationRules?: string[];
+}
+
+// Enhanced approval analysis
+export interface BusinessApproval {
+  name: string;
+  role: string;
+  criteria: string;
+  escalation?: string;
+  timeLimit?: string;
+}
+
+// Enhanced integration analysis
+export interface BusinessIntegration {
+  name: string;
+  type: 'api' | 'database' | 'file_system' | 'email' | 'notification' | 'authentication';
+  purpose: string;
+  criticality: 'essential' | 'important' | 'optional';
+  dataFlow?: 'inbound' | 'outbound' | 'bidirectional';
+}
+
+// Enhanced workflow pattern analysis
+export interface WorkflowPattern {
+  name: string;
+  type: 'sequential' | 'parallel' | 'conditional' | 'loop' | 'escalation' | 'approval_chain';
+  description: string;
+  complexity: 'simple' | 'moderate' | 'complex';
+  businessRules?: string[];
+}
+
+// Risk assessment analysis
+export interface RiskAssessment {
+  securityRisks: string[];
+  complianceRisks: string[];
+  operationalRisks: string[];
+  mitigationStrategies?: string[];
+}
+
+// Resource requirements analysis
+export interface ResourceRequirements {
+  userRoles: string[];
+  technicalComplexity: 'low' | 'medium' | 'high';
+  estimatedTimeframe: string;
+  infrastructureNeeds?: string[];
+}
+
+// Main enhanced business data interface
 export interface ExtractedBusinessData {
-  processes: string[];
-  forms: string[];
-  approvals: string[];
-  integrations: string[];
-  workflowPatterns: string[];
+  businessContext: BusinessContext;
+  processes: BusinessProcess[];
+  forms: BusinessForm[];
+  approvals: BusinessApproval[];
+  integrations: BusinessIntegration[];
+  workflowPatterns: WorkflowPattern[];
+  riskAssessment: RiskAssessment;
+  resourceRequirements: ResourceRequirements;
   confidence: number;
   validationWarnings?: string[];
   recommendations?: string[];
@@ -123,11 +196,26 @@ export class NLPService {
         }
 
         const result: ExtractedBusinessData = {
+          businessContext: parsedData.businessContext || {
+            industry: "General",
+            criticality: "standard",
+            scope: "department"
+          },
           processes: parsedData.processes || [],
           forms: parsedData.forms || [],
           approvals: parsedData.approvals || [],
           integrations: parsedData.integrations || [],
           workflowPatterns: parsedData.workflowPatterns || [],
+          riskAssessment: parsedData.riskAssessment || {
+            securityRisks: [],
+            complianceRisks: [],
+            operationalRisks: []
+          },
+          resourceRequirements: parsedData.resourceRequirements || {
+            userRoles: [],
+            technicalComplexity: "medium",
+            estimatedTimeframe: "2-4 weeks"
+          },
           confidence: parsedData.confidence || 0,
           usage: {
             promptTokens: response.usage?.prompt_tokens || 0,
@@ -265,11 +353,26 @@ export class NLPService {
       // Parse final result
       const finalData = JSON.parse(accumulatedArgs);
       const result: ExtractedBusinessData = {
+        businessContext: finalData.businessContext || {
+          industry: "General",
+          criticality: "standard",
+          scope: "department"
+        },
         processes: finalData.processes || [],
         forms: finalData.forms || [],
         approvals: finalData.approvals || [],
         integrations: finalData.integrations || [],
         workflowPatterns: finalData.workflowPatterns || [],
+        riskAssessment: finalData.riskAssessment || {
+          securityRisks: [],
+          complianceRisks: [],
+          operationalRisks: []
+        },
+        resourceRequirements: finalData.resourceRequirements || {
+          userRoles: [],
+          technicalComplexity: "medium",
+          estimatedTimeframe: "2-4 weeks"
+        },
         confidence: finalData.confidence || 0
       };
 
@@ -323,11 +426,26 @@ export class NLPService {
     const parsedData = JSON.parse(functionCall.arguments);
 
     return {
+      businessContext: parsedData.businessContext || {
+        industry: "General",
+        criticality: "standard",
+        scope: "department"
+      },
       processes: parsedData.processes || [],
       forms: parsedData.forms || [],
       approvals: parsedData.approvals || [],
       integrations: parsedData.integrations || [],
       workflowPatterns: parsedData.workflowPatterns || [],
+      riskAssessment: parsedData.riskAssessment || {
+        securityRisks: [],
+        complianceRisks: [],
+        operationalRisks: []
+      },
+      resourceRequirements: parsedData.resourceRequirements || {
+        userRoles: [],
+        technicalComplexity: "medium",
+        estimatedTimeframe: "2-4 weeks"
+      },
       confidence: parsedData.confidence || 0,
       usage: {
         promptTokens: response.usage?.prompt_tokens || 0,
@@ -403,64 +521,180 @@ export class NLPService {
   }
 
   private getSystemPrompt(): string {
-    return `You are an expert business application generator AI. Your task is to analyze natural language descriptions of business processes and extract structured requirements for generating complete business applications.
+    return `You are an expert business analyst and application architect AI specializing in Fortune 500 enterprise requirements extraction. Your task is to perform deep analysis of natural language business descriptions and extract comprehensive structured requirements for generating complete business applications.
 
-Extract the following information:
-- Business processes (specific workflows and operations)
-- Required forms (data collection interfaces)
-- Approval steps (authorization and review processes)
-- System integrations (external APIs and services)
-- Workflow patterns (sequential, parallel, conditional flows)
+PERFORM ADVANCED BUSINESS ANALYSIS:
 
-Provide a confidence score from 0.0 to 1.0 based on:
-- Clarity and specificity of the description
-- Completeness of business context
-- Technical feasibility
-- Workflow complexity
+1. BUSINESS CONTEXT ANALYSIS:
+   - Industry domain identification (Healthcare, Finance, HR, Operations, etc.)
+   - Business criticality level (Mission-critical, Important, Standard, Support)
+   - Organizational scope (Department, Division, Enterprise-wide)
+   - Compliance requirements (SOX, HIPAA, GDPR, SOC2, etc.)
 
-Focus on enterprise-grade applications with proper security, scalability, and user experience considerations.`;
+2. PROCESS INTELLIGENCE:
+   - Core business processes with detailed characteristics
+   - Process dependencies and relationships
+   - Data flow patterns and information architecture
+   - Decision points and business rules
+   - Exception handling scenarios
+
+3. WORKFLOW PATTERN RECOGNITION:
+   - Sequential workflows (step-by-step processes)
+   - Parallel processing (concurrent operations)
+   - Conditional branching (decision-based routing)
+   - Loop patterns (iterative processes)
+   - Escalation patterns (exception handling)
+   - Approval hierarchies (authorization chains)
+
+4. TECHNICAL ARCHITECTURE:
+   - System integration requirements and APIs
+   - Data persistence needs and structures
+   - Security and access control requirements
+   - Performance and scalability considerations
+   - Third-party service dependencies
+
+5. RISK AND COMPLIANCE:
+   - Security risk assessment
+   - Compliance requirements identification
+   - Data privacy considerations
+   - Audit trail requirements
+
+6. RESOURCE ANALYSIS:
+   - User roles and permissions
+   - Technical complexity assessment
+   - Implementation timeline estimate
+   - Operational requirements
+
+Provide comprehensive confidence scoring based on:
+- Business context clarity and completeness
+- Process specification detail and feasibility
+- Technical architecture alignment
+- Compliance and security considerations
+- Resource requirement clarity
+
+Focus on enterprise-grade applications with Fortune 500 standards for security, compliance, scalability, and operational excellence.`;
   }
 
   private getFunctionSchema() {
     return {
       name: "extract_business_requirements",
-      description: "Extract structured business requirements from natural language description",
+      description: "Extract comprehensive structured business requirements with deep enterprise analysis",
       parameters: {
         type: "object",
         properties: {
+          businessContext: {
+            type: "object",
+            properties: {
+              industry: { type: "string", description: "Industry domain (Healthcare, Finance, HR, Operations, etc.)" },
+              criticality: { type: "string", enum: ["mission_critical", "important", "standard", "support"], description: "Business criticality level" },
+              scope: { type: "string", enum: ["department", "division", "enterprise"], description: "Organizational scope" },
+              complianceRequirements: { type: "array", items: { type: "string" }, description: "Compliance standards (SOX, HIPAA, GDPR, SOC2, etc.)" }
+            },
+            required: ["industry", "criticality", "scope"]
+          },
           processes: {
             type: "array",
-            items: { type: "string" },
-            description: "List of business processes (e.g., employee_onboarding, background_verification)"
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string", description: "Process name" },
+                type: { type: "string", enum: ["core", "support", "governance", "integration"], description: "Process type" },
+                description: { type: "string", description: "Detailed process description" },
+                complexity: { type: "string", enum: ["low", "medium", "high"], description: "Process complexity" },
+                dependencies: { type: "array", items: { type: "string" }, description: "Process dependencies" }
+              },
+              required: ["name", "type", "description", "complexity"]
+            },
+            description: "Detailed business processes with characteristics"
           },
           forms: {
             type: "array",
-            items: { type: "string" },
-            description: "List of required forms (e.g., employee_information_form, tax_form)"
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string", description: "Form name" },
+                purpose: { type: "string", description: "Form purpose and usage" },
+                complexity: { type: "string", enum: ["simple", "moderate", "complex"], description: "Form complexity" },
+                dataTypes: { type: "array", items: { type: "string" }, description: "Types of data collected" },
+                validationRules: { type: "array", items: { type: "string" }, description: "Validation requirements" }
+              },
+              required: ["name", "purpose", "complexity"]
+            },
+            description: "Required forms with detailed specifications"
           },
           approvals: {
             type: "array",
-            items: { type: "string" },
-            description: "List of approval steps (e.g., manager_approval, hr_approval)"
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string", description: "Approval step name" },
+                role: { type: "string", description: "Approver role or position" },
+                criteria: { type: "string", description: "Approval criteria" },
+                escalation: { type: "string", description: "Escalation process" },
+                timeLimit: { type: "string", description: "Time limit for approval" }
+              },
+              required: ["name", "role", "criteria"]
+            },
+            description: "Approval workflows with detailed requirements"
           },
           integrations: {
             type: "array",
-            items: { type: "string" },
-            description: "List of system integrations (e.g., background_check_api, email_service)"
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string", description: "Integration name" },
+                type: { type: "string", enum: ["api", "database", "file_system", "email", "notification", "authentication"], description: "Integration type" },
+                purpose: { type: "string", description: "Integration purpose" },
+                criticality: { type: "string", enum: ["essential", "important", "optional"], description: "Integration criticality" },
+                dataFlow: { type: "string", enum: ["inbound", "outbound", "bidirectional"], description: "Data flow direction" }
+              },
+              required: ["name", "type", "purpose", "criticality"]
+            },
+            description: "System integrations with detailed specifications"
           },
           workflowPatterns: {
             type: "array",
-            items: { type: "string" },
-            description: "List of workflow patterns (e.g., sequential_approval, parallel_processing)"
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string", description: "Pattern name" },
+                type: { type: "string", enum: ["sequential", "parallel", "conditional", "loop", "escalation", "approval_chain"], description: "Workflow pattern type" },
+                description: { type: "string", description: "Pattern description" },
+                complexity: { type: "string", enum: ["simple", "moderate", "complex"], description: "Pattern complexity" },
+                businessRules: { type: "array", items: { type: "string" }, description: "Business rules governing the pattern" }
+              },
+              required: ["name", "type", "description", "complexity"]
+            },
+            description: "Intelligent workflow patterns with detailed analysis"
+          },
+          riskAssessment: {
+            type: "object",
+            properties: {
+              securityRisks: { type: "array", items: { type: "string" }, description: "Identified security risks" },
+              complianceRisks: { type: "array", items: { type: "string" }, description: "Compliance risks" },
+              operationalRisks: { type: "array", items: { type: "string" }, description: "Operational risks" },
+              mitigationStrategies: { type: "array", items: { type: "string" }, description: "Risk mitigation strategies" }
+            },
+            required: ["securityRisks", "complianceRisks", "operationalRisks"]
+          },
+          resourceRequirements: {
+            type: "object",
+            properties: {
+              userRoles: { type: "array", items: { type: "string" }, description: "Required user roles and permissions" },
+              technicalComplexity: { type: "string", enum: ["low", "medium", "high"], description: "Overall technical complexity" },
+              estimatedTimeframe: { type: "string", description: "Implementation timeframe estimate" },
+              infrastructureNeeds: { type: "array", items: { type: "string" }, description: "Infrastructure requirements" }
+            },
+            required: ["userRoles", "technicalComplexity", "estimatedTimeframe"]
           },
           confidence: {
             type: "number",
             minimum: 0,
             maximum: 1,
-            description: "Confidence score for the extraction accuracy"
+            description: "Overall confidence score for the comprehensive analysis"
           }
         },
-        required: ["processes", "forms", "approvals", "integrations", "workflowPatterns", "confidence"]
+        required: ["businessContext", "processes", "forms", "approvals", "integrations", "workflowPatterns", "riskAssessment", "resourceRequirements", "confidence"]
       }
     };
   }

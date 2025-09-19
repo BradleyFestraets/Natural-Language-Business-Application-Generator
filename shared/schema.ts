@@ -34,12 +34,72 @@ export const businessRequirements = pgTable("business_requirements", {
   userId: varchar("user_id").notNull().references(() => users.id),
   originalDescription: text("original_description").notNull(),
   extractedEntities: json("extracted_entities").$type<{
-    processes: string[];
-    forms: string[];
-    approvals: string[];
-    integrations: string[];
+    businessContext?: {
+      industry?: string;
+      criticality?: string;
+      scope?: string;
+      complianceRequirements?: string[];
+    };
+    processes?: Array<{
+      name: string;
+      type?: string;
+      description?: string;
+      complexity?: string;
+      dependencies?: string[];
+    }>;
+    forms?: Array<{
+      name: string;
+      purpose?: string;
+      complexity?: string;
+      dataTypes?: string[];
+      validationRules?: string[];
+    }>;
+    approvals?: Array<{
+      name: string;
+      role?: string;
+      criteria?: string;
+      escalation?: string;
+      timeLimit?: string;
+    }>;
+    integrations?: Array<{
+      name: string;
+      type?: string;
+      purpose?: string;
+      criticality?: string;
+      dataFlow?: string;
+    }>;
+    workflowPatterns?: Array<{
+      name: string;
+      type?: string;
+      description?: string;
+      complexity?: string;
+      businessRules?: string[];
+    }>;
+    riskAssessment?: {
+      securityRisks?: string[];
+      complianceRisks?: string[];
+      operationalRisks?: string[];
+      mitigationStrategies?: string[];
+    };
+    resourceRequirements?: {
+      userRoles?: string[];
+      technicalComplexity?: string;
+      estimatedTimeframe?: string;
+      infrastructureNeeds?: string[];
+    };
+    // Legacy support for backward compatibility
+    processes_legacy?: string[];
+    forms_legacy?: string[];
+    approvals_legacy?: string[];
+    integrations_legacy?: string[];
   }>(),
-  workflowPatterns: json("workflow_patterns").$type<string[]>(),
+  workflowPatterns: json("workflow_patterns").$type<Array<{
+    name: string;
+    type?: string;
+    description?: string;
+    complexity?: string;
+    businessRules?: string[];
+  }> | string[]>(),
   confidence: real("confidence").notNull(),
   status: varchar("status", { enum: ["analyzing", "validated", "generating_app", "completed"] }).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),

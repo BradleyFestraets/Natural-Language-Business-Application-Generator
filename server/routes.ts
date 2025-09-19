@@ -144,10 +144,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       const extractedEntities = {
+        businessContext: parseResult.businessContext,
         processes: parseResult.processes,
         forms: parseResult.forms,
         approvals: parseResult.approvals,
-        integrations: parseResult.integrations
+        integrations: parseResult.integrations,
+        workflowPatterns: parseResult.workflowPatterns,
+        riskAssessment: parseResult.riskAssessment,
+        resourceRequirements: parseResult.resourceRequirements,
+        // Legacy format for backward compatibility
+        processes_legacy: parseResult.processes?.map(p => p.name) || [],
+        forms_legacy: parseResult.forms?.map(f => f.name) || [],
+        approvals_legacy: parseResult.approvals?.map(a => a.name) || [],
+        integrations_legacy: parseResult.integrations?.map(i => i.name) || []
       };
       const workflowPatterns = parseResult.workflowPatterns;
       const confidence = parseResult.confidence;
@@ -196,7 +205,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const businessRequirement = await storage.createBusinessRequirement({
         userId,
         originalDescription: description,
-        extractedEntities: { processes: [], forms: [], approvals: [], integrations: [] },
+        extractedEntities: {
+          businessContext: { industry: "General", criticality: "standard", scope: "department" },
+          processes: [],
+          forms: [],
+          approvals: [],
+          integrations: [],
+          workflowPatterns: [],
+          riskAssessment: { securityRisks: [], complianceRisks: [], operationalRisks: [] },
+          resourceRequirements: { userRoles: [], technicalComplexity: "medium", estimatedTimeframe: "2-4 weeks" },
+          processes_legacy: [],
+          forms_legacy: [],
+          approvals_legacy: [],
+          integrations_legacy: []
+        },
         workflowPatterns: [],
         confidence: 0,
         status: "analyzing"
@@ -217,10 +239,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       nlpService.streamParseBusinessDescription(description, onUpdate)
         .then(async (parseResult) => {
           const extractedEntities = {
+            businessContext: parseResult.businessContext,
             processes: parseResult.processes,
             forms: parseResult.forms,
             approvals: parseResult.approvals,
-            integrations: parseResult.integrations
+            integrations: parseResult.integrations,
+            workflowPatterns: parseResult.workflowPatterns,
+            riskAssessment: parseResult.riskAssessment,
+            resourceRequirements: parseResult.resourceRequirements,
+            // Legacy format for backward compatibility
+            processes_legacy: parseResult.processes?.map(p => p.name) || [],
+            forms_legacy: parseResult.forms?.map(f => f.name) || [],
+            approvals_legacy: parseResult.approvals?.map(a => a.name) || [],
+            integrations_legacy: parseResult.integrations?.map(i => i.name) || []
           };
           
           // Update stored business requirement with final results
