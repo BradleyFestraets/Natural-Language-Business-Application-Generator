@@ -82,6 +82,7 @@ export interface TemplateDefinition {
   
   // Source tracking
   sourceApplicationId?: string;
+  organizationId?: string; // For multi-tenant organization scoping
   createdAt: Date;
   updatedAt: Date;
 }
@@ -242,6 +243,7 @@ export class TemplateGenerationService {
       deploymentConfiguration,
       
       sourceApplicationId: application.id,
+      organizationId: application.organizationId, // Set organization for multi-tenant scoping
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -292,10 +294,17 @@ export class TemplateGenerationService {
     industry?: string;
     complexity?: string;
     search?: string;
-  } = {}): Promise<TemplateDefinition[]> {
+    organizationId: string; // REQUIRED for security - prevents cross-tenant exposure
+  }): Promise<TemplateDefinition[]> {
     console.log(`[TEMPLATE_CATALOG] Retrieving templates with filters:`, filters);
 
     let templates = Array.from(this.templateCache.values());
+    
+    // Apply organization scoping (REQUIRED for security - NO optional filtering)
+    if (!filters.organizationId) {
+      throw new Error("organizationId is required for template retrieval - prevents cross-tenant data exposure");
+    }
+    templates = templates.filter(t => t.organizationId === filters.organizationId);
     
     // Apply filters
     if (filters.category) {

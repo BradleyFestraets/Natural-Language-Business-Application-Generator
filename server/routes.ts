@@ -188,7 +188,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const businessProcessConnector = new BusinessProcessConnector();
 
   // Start automated business process
-  app.post("/api/process/start", isAuthenticated, async (req: any, res: Response) => {
+  app.post("/api/process/start", isAuthenticated, requireOrganization, async (req: any, res: Response) => {
     try {
       const { workflowId, businessRequirementId, initialData = {} } = req.body;
       const userId = req.user.claims.sub;
@@ -249,7 +249,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get process analytics dashboard
-  app.get("/api/process/analytics", isAuthenticated, async (req: any, res: Response) => {
+  app.get("/api/process/analytics", isAuthenticated, requireOrganization, async (req: any, res: Response) => {
     try {
       const dashboard = processMonitoringService.getProcessDashboard();
       res.status(200).json(dashboard);
@@ -263,7 +263,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Send business process notifications  
-  app.post("/api/process/notify", isAuthenticated, async (req: any, res: Response) => {
+  app.post("/api/process/notify", isAuthenticated, requireOrganization, async (req: any, res: Response) => {
     try {
       const { type, recipients, message, subject, priority = "medium" } = req.body;
       
@@ -290,7 +290,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Generate process performance report
-  app.get("/api/process/reports/:timeRange", isAuthenticated, async (req: any, res: Response) => {
+  app.get("/api/process/reports/:timeRange", isAuthenticated, requireOrganization, async (req: any, res: Response) => {
     try {
       const { timeRange = "day" } = req.params;
       
@@ -319,10 +319,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const generateTemplateSchema = z.object({
     applicationId: z.string().min(1, "Application ID is required"),
     options: z.object({
-      includeForms: z.boolean().optional(),
-      includeWorkflows: z.boolean().optional(),
-      includeIntegrations: z.boolean().optional(),
-      customization: z.string().optional()
+      includeCustomizations: z.boolean().optional(),
+      generateDocumentation: z.boolean().optional(),
+      extractAdvancedPatterns: z.boolean().optional()
     }).optional().default({})
   });
 
@@ -409,7 +408,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         search: req.query.search
       };
 
-      const templates = await templateGenerationService.getAvailableTemplates(filters);
+      const templates = await templateGenerationService.getAvailableTemplates({
+        ...filters,
+        organizationId: req.organizationId // Add organization scoping at service level
+      });
       
       res.status(200).json({
         templates: templates.map(t => ({
