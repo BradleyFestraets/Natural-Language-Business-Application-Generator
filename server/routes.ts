@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { z } from "zod";
 import { insertBusinessRequirementSchema, insertGeneratedApplicationSchema, insertEmbeddedChatbotSchema } from "@shared/schema";
 import { NLPService } from "./services/nlpService.js";
+import { ClarificationService } from "./services/clarificationService";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { requireAIServiceMiddleware, checkAIServiceMiddleware } from "./middleware/aiServiceMiddleware";
 import { globalServiceHealth } from "./config/validation";
@@ -44,13 +45,29 @@ const chatbotInteractionSchema = z.object({
   sessionId: z.string().optional()
 });
 
+const clarificationQuestionSchema = z.object({
+  businessRequirementId: z.string()
+});
+
+const clarificationResponseSchema = z.object({
+  sessionId: z.string(),
+  questionId: z.string(),
+  response: z.string().min(1, "Response cannot be empty")
+});
+
+const refineRequirementsSchema = z.object({
+  businessRequirementId: z.string(),
+  sessionId: z.string()
+});
+
 export async function registerRoutes(app: Express): Promise<Server> {
   
   // Set up authentication first
   await setupAuth(app);
   
-  // Initialize NLP Service
+  // Initialize NLP Service and Clarification Service
   const nlpService = new NLPService();
+  const clarificationService = new ClarificationService();
   
   // Auth routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
@@ -188,6 +205,226 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         res.status(500).json({ message: "Internal server error validating description" });
       }
+    }
+  });
+
+  // ===== CLARIFICATION ENDPOINTS =====
+  
+  // Generate clarification questions for a business requirement
+  app.post("/api/nlp/clarification/questions", isAuthenticated, requireAIServiceMiddleware, async (req: any, res: Response) => {
+    try {
+      const validatedData = clarificationQuestionSchema.parse(req.body);
+      const { businessRequirementId } = validatedData;
+      
+      // Get the business requirement
+      const businessRequirement = await storage.getBusinessRequirement(businessRequirementId);
+      if (!businessRequirement) {
+        return res.status(404).json({ message: "Business requirement not found" });
+      }
+      
+      // Generate clarification questions
+      const questions = await clarificationService.generateClarificationQuestions(
+        businessRequirementId,
+        {
+          processes: businessRequirement.extractedEntities?.processes || [],
+          forms: businessRequirement.extractedEntities?.forms || [],
+          approvals: businessRequirement.extractedEntities?.approvals || [],
+          integrations: businessRequirement.extractedEntities?.integrations || [],
+          workflowPatterns: businessRequirement.workflowPatterns || [],
+          confidence: businessRequirement.confidence
+        },
+        businessRequirement.originalDescription
+      );
+      
+      // Create clarification session
+      const session = await clarificationService.createClarificationSession(
+        businessRequirementId,
+        questions
+      );
+      
+      res.status(200).json({
+        sessionId: session.sessionId,
+        questions: session.questions,
+        totalQuestions: session.totalQuestions,
+        estimatedCompletionTime: session.estimatedCompletionTime,
+        currentQuestion: session.questions[0] || null
+      });
+      
+    } catch (error) {
+      console.error("Error generating clarification questions:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: error.errors[0].message });
+      } else {
+        res.status(500).json({ message: "Internal server error generating clarification questions" });
+      }
+    }
+  });
+  
+  // Process response to clarification question
+  app.post("/api/nlp/clarification/response", isAuthenticated, requireAIServiceMiddleware, async (req: any, res: Response) => {
+    try {
+      const validatedData = clarificationResponseSchema.parse(req.body);
+      const { sessionId, questionId, response } = validatedData;
+      
+      const session = clarificationService.getSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ message: "Clarification session not found" });
+      }
+      
+      // Get business requirement for context
+      const businessRequirement = await storage.getBusinessRequirement(session.businessRequirementId);
+      if (!businessRequirement) {
+        return res.status(404).json({ message: "Business requirement not found" });
+      }
+      
+      // Validate response consistency
+      const validationResult = await clarificationService.validateResponse(
+        questionId,
+        response,
+        {
+          processes: businessRequirement.extractedEntities?.processes || [],
+          forms: businessRequirement.extractedEntities?.forms || [],
+          approvals: businessRequirement.extractedEntities?.approvals || [],
+          integrations: businessRequirement.extractedEntities?.integrations || [],
+          workflowPatterns: businessRequirement.workflowPatterns || [],
+          confidence: businessRequirement.confidence
+        }
+      );
+      
+      // Process the response
+      const result = await clarificationService.processResponse(sessionId, {
+        questionId,
+        response,
+        confidence: validationResult.confidence,
+        followUpNeeded: validationResult.followUpNeeded,
+        followUpQuestion: validationResult.followUpQuestion
+      });
+      
+      res.status(200).json({
+        sessionId: result.session.sessionId,
+        isComplete: result.isComplete,
+        nextQuestion: result.nextQuestion,
+        currentQuestionIndex: result.session.currentQuestionIndex,
+        totalQuestions: result.session.totalQuestions,
+        progress: (result.session.currentQuestionIndex / result.session.totalQuestions) * 100,
+        validationResult: {
+          isConsistent: validationResult.isConsistent,
+          confidence: validationResult.confidence
+        }
+      });
+      
+    } catch (error) {
+      console.error("Error processing clarification response:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: error.errors[0].message });
+      } else {
+        res.status(500).json({ message: "Internal server error processing response" });
+      }
+    }
+  });
+  
+  // Refine requirements based on clarification responses
+  app.post("/api/nlp/requirements/:id/refine", isAuthenticated, requireAIServiceMiddleware, async (req: any, res: Response) => {
+    try {
+      const { id: businessRequirementId } = req.params;
+      const validatedData = refineRequirementsSchema.parse({ 
+        businessRequirementId, 
+        ...req.body 
+      });
+      const { sessionId } = validatedData;
+      
+      // Get business requirement
+      const businessRequirement = await storage.getBusinessRequirement(businessRequirementId);
+      if (!businessRequirement) {
+        return res.status(404).json({ message: "Business requirement not found" });
+      }
+      
+      // Refine requirements using clarification responses
+      const refinedRequirements = await clarificationService.refineRequirements(
+        sessionId,
+        {
+          processes: businessRequirement.extractedEntities?.processes || [],
+          forms: businessRequirement.extractedEntities?.forms || [],
+          approvals: businessRequirement.extractedEntities?.approvals || [],
+          integrations: businessRequirement.extractedEntities?.integrations || [],
+          workflowPatterns: businessRequirement.workflowPatterns || [],
+          confidence: businessRequirement.confidence
+        }
+      );
+      
+      // Update business requirement with refined data
+      const updatedRequirement = await storage.updateBusinessRequirement(businessRequirementId, {
+        extractedEntities: {
+          processes: refinedRequirements.processes,
+          forms: refinedRequirements.forms,
+          approvals: refinedRequirements.approvals,
+          integrations: refinedRequirements.integrations
+        },
+        workflowPatterns: refinedRequirements.workflowPatterns,
+        confidence: refinedRequirements.confidence,
+        status: "validated"
+      });
+      
+      if (!updatedRequirement) {
+        return res.status(500).json({ message: "Failed to update business requirement" });
+      }
+      
+      res.status(200).json({
+        businessRequirementId: updatedRequirement.id,
+        refinedRequirements: {
+          extractedEntities: {
+            processes: refinedRequirements.processes,
+            forms: refinedRequirements.forms,
+            approvals: refinedRequirements.approvals,
+            integrations: refinedRequirements.integrations
+          },
+          workflowPatterns: refinedRequirements.workflowPatterns,
+          confidence: refinedRequirements.confidence
+        },
+        qualityMetrics: {
+          refinementScore: refinedRequirements.refinementScore,
+          completenessScore: refinedRequirements.completenessScore,
+          consistencyScore: refinedRequirements.consistencyScore
+        },
+        suggestions: refinedRequirements.suggestions,
+        status: "refined"
+      });
+      
+    } catch (error) {
+      console.error("Error refining requirements:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: error.errors[0].message });
+      } else {
+        res.status(500).json({ message: "Internal server error refining requirements" });
+      }
+    }
+  });
+  
+  // Get clarification session status
+  app.get("/api/nlp/clarification/session/:sessionId", isAuthenticated, async (req: any, res: Response) => {
+    try {
+      const { sessionId } = req.params;
+      
+      const session = clarificationService.getSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ message: "Clarification session not found" });
+      }
+      
+      res.status(200).json({
+        sessionId: session.sessionId,
+        businessRequirementId: session.businessRequirementId,
+        status: session.status,
+        currentQuestionIndex: session.currentQuestionIndex,
+        totalQuestions: session.totalQuestions,
+        progress: (session.currentQuestionIndex / session.totalQuestions) * 100,
+        estimatedCompletionTime: session.estimatedCompletionTime,
+        currentQuestion: session.questions[session.currentQuestionIndex] || null,
+        completedQuestions: session.completedQuestions
+      });
+      
+    } catch (error) {
+      console.error("Error getting clarification session:", error);
+      res.status(500).json({ message: "Internal server error getting session status" });
     }
   });
 

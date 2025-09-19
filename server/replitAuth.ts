@@ -96,6 +96,7 @@ export async function setupAuth(app: Express) {
     verified(null, user);
   };
 
+  // Register strategy for production domains
   for (const domain of process.env
     .REPLIT_DOMAINS!.split(",")) {
     const strategy = new Strategy(
@@ -108,6 +109,32 @@ export async function setupAuth(app: Express) {
       verify,
     );
     passport.use(strategy);
+  }
+
+  // Add localhost strategy for development
+  if (process.env.NODE_ENV === "development") {
+    const localhostStrategy = new Strategy(
+      {
+        name: "replitauth:127.0.0.1",
+        config,
+        scope: "openid email profile offline_access", 
+        callbackURL: `http://127.0.0.1:5000/api/callback`,
+      },
+      verify,
+    );
+    passport.use(localhostStrategy);
+
+    // Also add localhost alias
+    const localhostAliasStrategy = new Strategy(
+      {
+        name: "replitauth:localhost",
+        config,
+        scope: "openid email profile offline_access",
+        callbackURL: `http://localhost:5000/api/callback`,
+      },
+      verify,
+    );
+    passport.use(localhostAliasStrategy);
   }
 
   passport.serializeUser((user: Express.User, cb) => cb(null, user));
