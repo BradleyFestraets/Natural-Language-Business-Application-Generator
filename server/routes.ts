@@ -631,6 +631,47 @@ export async function registerRoutes(
     });
   });
 
+  // Circuit breaker metrics endpoint for monitoring - ADMIN ONLY
+  app.get("/api/ai-service/metrics", isAuthenticated, requireAdmin(), async (req: Request, res: Response) => {
+    try {
+      const metrics = nlpService.getServiceMetrics();
+      const degradationDuration = await nlpService.getDegradationDuration();
+      
+      res.json({
+        production: {
+          totalCalls: metrics.totalCalls,
+          successfulCalls: metrics.successfulCalls,
+          failedCalls: metrics.failedCalls,
+          averageResponseTime: metrics.averageResponseTime,
+          lastFailureTime: metrics.lastFailureTime,
+          lastSuccessTime: metrics.lastSuccessTime
+        },
+        probes: {
+          totalProbes: metrics.totalProbes,
+          successfulProbes: metrics.successfulProbes,
+          failedProbes: metrics.failedProbes,
+          lastProbeTime: metrics.lastProbeTime,
+          lastSuccessfulProbe: metrics.lastSuccessfulProbe
+        },
+        circuit: {
+          state: metrics.circuitState,
+          degradationDuration
+        },
+        healthCheck: {
+          productionAvailability: metrics.lastSuccessTime ? Date.now() - metrics.lastSuccessTime < 300000 : false, // 5 min since last production success
+          probeAvailability: metrics.lastSuccessfulProbe ? Date.now() - metrics.lastSuccessfulProbe < 300000 : false, // 5 min since last successful probe
+          productionErrorRate: metrics.totalCalls > 0 ? (metrics.failedCalls / metrics.totalCalls) * 100 : 0,
+          probeErrorRate: metrics.totalProbes > 0 ? (metrics.failedProbes / metrics.totalProbes) * 100 : 0,
+          timeSinceLastSuccess: metrics.lastSuccessTime ? Date.now() - metrics.lastSuccessTime : null,
+          timeSinceLastProbe: metrics.lastSuccessfulProbe ? Date.now() - metrics.lastSuccessfulProbe : null
+        },
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to retrieve AI service metrics' });
+    }
+  });
+
   // ===== ADMIN API ENDPOINTS =====
 
   // Demo admin endpoint with organization and permission requirements

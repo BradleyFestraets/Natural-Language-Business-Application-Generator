@@ -143,6 +143,37 @@ export interface AIServiceHealthStatus {
   };
 }
 
+// Circuit breaker states
+enum CircuitState {
+  CLOSED = 'CLOSED',
+  OPEN = 'OPEN',
+  HALF_OPEN = 'HALF_OPEN'
+}
+
+interface CircuitBreakerConfig {
+  failureThreshold: number;
+  resetTimeout: number;
+  monitoringPeriod: number;
+  halfOpenMaxCalls: number;
+}
+
+interface ServiceMetrics {
+  totalCalls: number;
+  successfulCalls: number;
+  failedCalls: number;
+  averageResponseTime: number;
+  lastFailureTime: number | null;
+  lastSuccessTime: number | null;
+}
+
+interface ProbeMetrics {
+  totalProbes: number;
+  successfulProbes: number;
+  failedProbes: number;
+  lastProbeTime: number | null;
+  lastSuccessfulProbe: number | null;
+}
+
 export class NLPService {
   private openai: OpenAI;
   private cache: Map<string, ExtractedBusinessData> = new Map();
@@ -153,6 +184,37 @@ export class NLPService {
   private degradationStartTime: number | null = null;
   private lastSuccessfulAICall: number | null = null;
   private fallbackModeActive: boolean = false;
+
+  // Circuit breaker properties
+  private circuitState: CircuitState = CircuitState.CLOSED;
+  private failureCount: number = 0;
+  private lastFailureTime: number | null = null;
+  private nextAttemptTime: number = 0;
+  private halfOpenCalls: number = 0;
+  
+  private readonly circuitConfig: CircuitBreakerConfig = {
+    failureThreshold: 5, // Open circuit after 5 consecutive failures
+    resetTimeout: 60000, // Try to close circuit after 60 seconds
+    monitoringPeriod: 300000, // 5 minutes monitoring window
+    halfOpenMaxCalls: 3 // Allow 3 calls in half-open state
+  };
+  
+  private metrics: ServiceMetrics = {
+    totalCalls: 0,
+    successfulCalls: 0,
+    failedCalls: 0,
+    averageResponseTime: 0,
+    lastFailureTime: null,
+    lastSuccessTime: null
+  };
+
+  private probeMetrics: ProbeMetrics = {
+    totalProbes: 0,
+    successfulProbes: 0,
+    failedProbes: 0,
+    lastProbeTime: null,
+    lastSuccessfulProbe: null
+  };
 
   constructor() {
     // Only initialize OpenAI if API key is available
@@ -167,15 +229,148 @@ export class NLPService {
   }
 
   /**
-   * Check AI service availability with caching
+   * Circuit breaker - check if calls should be allowed
+   */
+  private isCircuitOpen(): boolean {
+    const now = Date.now();
+    
+    switch (this.circuitState) {
+      case CircuitState.CLOSED:
+        return false;
+      
+      case CircuitState.OPEN:
+        if (now >= this.nextAttemptTime) {
+          this.circuitState = CircuitState.HALF_OPEN;
+          this.halfOpenCalls = 0;
+          return false;
+        }
+        return true;
+      
+      case CircuitState.HALF_OPEN:
+        // If half-open calls exceed maximum, transition back to OPEN with timer to prevent deadlock
+        if (this.halfOpenCalls >= this.circuitConfig.halfOpenMaxCalls) {
+          this.circuitState = CircuitState.OPEN;
+          this.nextAttemptTime = Date.now() + this.circuitConfig.resetTimeout;
+          return true;
+        }
+        return false;
+      
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * Record successful call - update circuit breaker and metrics
+   */
+  private recordSuccess(responseTime: number, isProbe: boolean = false): void {
+    this.circuitState = CircuitState.CLOSED;
+    this.failureCount = 0;
+    this.lastFailureTime = null;
+    this.halfOpenCalls = 0;
+    
+    if (isProbe) {
+      // Update probe metrics
+      this.probeMetrics.totalProbes++;
+      this.probeMetrics.successfulProbes++;
+      this.probeMetrics.lastProbeTime = Date.now();
+      this.probeMetrics.lastSuccessfulProbe = Date.now();
+    } else {
+      // Update production metrics
+      this.metrics.totalCalls++;
+      this.metrics.successfulCalls++;
+      this.metrics.lastSuccessTime = Date.now();
+      
+      // Update average response time using only successful calls
+      this.metrics.averageResponseTime = 
+        (this.metrics.averageResponseTime * (this.metrics.successfulCalls - 1) + responseTime) / this.metrics.successfulCalls;
+    }
+    
+    // Update service state
+    this.lastSuccessfulAICall = Date.now();
+    if (this.fallbackModeActive) {
+      this.fallbackModeActive = false;
+      this.degradationStartTime = null;
+    }
+  }
+
+  /**
+   * Record failed call - update circuit breaker and metrics
+   */
+  private recordFailure(error: Error, isProbe: boolean = false): void {
+    this.failureCount++;
+    this.lastFailureTime = Date.now();
+    
+    if (isProbe) {
+      // Update probe metrics
+      this.probeMetrics.totalProbes++;
+      this.probeMetrics.failedProbes++;
+      this.probeMetrics.lastProbeTime = Date.now();
+    } else {
+      // Update production metrics
+      this.metrics.totalCalls++;
+      this.metrics.failedCalls++;
+      this.metrics.lastFailureTime = Date.now();
+    }
+    
+    // Update circuit state - only increment half-open calls on failure, not in recordFailure
+    if (this.circuitState === CircuitState.HALF_OPEN) {
+      this.circuitState = CircuitState.OPEN;
+      this.nextAttemptTime = Date.now() + this.circuitConfig.resetTimeout;
+    } else if (this.failureCount >= this.circuitConfig.failureThreshold) {
+      this.circuitState = CircuitState.OPEN;
+      this.nextAttemptTime = Date.now() + this.circuitConfig.resetTimeout;
+    }
+    
+    // Track degradation start
+    if (!this.fallbackModeActive) {
+      this.degradationStartTime = Date.now();
+      this.fallbackModeActive = true;
+    }
+  }
+
+  /**
+   * Enhanced exponential backoff with jitter
+   */
+  private calculateBackoffDelay(attempt: number, baseDelay: number = 1000): number {
+    const exponentialDelay = Math.pow(2, attempt) * baseDelay;
+    const maxDelay = 30000; // 30 seconds max
+    const jitter = Math.random() * 0.1 * exponentialDelay; // 10% jitter
+    
+    return Math.min(exponentialDelay + jitter, maxDelay);
+  }
+
+  /**
+   * Get service metrics for monitoring
+   */
+  getServiceMetrics(): ServiceMetrics & ProbeMetrics & { circuitState: CircuitState } {
+    return {
+      ...this.metrics,
+      ...this.probeMetrics,
+      circuitState: this.circuitState
+    };
+  }
+
+  /**
+   * Check AI service availability with caching - no half-open tracking here
    */
   async checkAIServiceAvailability(): Promise<boolean> {
+    // Check circuit breaker first
+    if (this.isCircuitOpen()) {
+      return false;
+    }
     const cacheKey = 'availability_check';
     const cached = this.availabilityCache.get(cacheKey);
     
     // Return cached result if still valid
     if (cached && Date.now() - cached.timestamp < this.AVAILABILITY_CACHE_TTL) {
       return cached.available;
+    }
+
+    // Check circuit breaker first
+    if (this.isCircuitOpen()) {
+      this.availabilityCache.set(cacheKey, { available: false, timestamp: Date.now() });
+      return false;
     }
 
     try {
@@ -193,37 +388,55 @@ export class NLPService {
         });
       }
 
-      // Quick ping to OpenAI to check connectivity
-      const startTime = Date.now();
-      const response = await this.openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
-        messages: [{ role: "user", content: "ping" }],
-        max_tokens: 1
-      }, {
-        timeout: 5000 // 5 second timeout
-      });
-
-      const responseTime = Date.now() - startTime;
-      const available = response.choices?.[0] ? true : false;
-      
-      // Track successful AI calls
-      if (available) {
-        this.lastSuccessfulAICall = Date.now();
-        if (this.fallbackModeActive) {
-          this.fallbackModeActive = false;
-          this.degradationStartTime = null;
+      // Only do actual ping if not returning cached result
+      if (!cached || Date.now() - cached.timestamp > this.AVAILABILITY_CACHE_TTL) {
+        // Increment half-open calls only before actual outbound call
+        if (this.circuitState === CircuitState.HALF_OPEN) {
+          this.halfOpenCalls++;
+          // Check if we've exceeded the cap after incrementing
+          if (this.halfOpenCalls > this.circuitConfig.halfOpenMaxCalls) {
+            this.circuitState = CircuitState.OPEN;
+            this.nextAttemptTime = Date.now() + this.circuitConfig.resetTimeout;
+            return false;
+          }
         }
+
+        // Enhanced ping to OpenAI with proper timeout handling
+        const startTime = Date.now();
+        const abortController = new AbortController();
+        const timeoutId = setTimeout(() => abortController.abort(), 5000); // 5 second timeout
+        
+        let response;
+        try {
+          response = await this.openai.chat.completions.create({
+            model: "gpt-3.5-turbo",
+            messages: [{ role: "user", content: "ping" }],
+            max_tokens: 1
+          }, {
+            signal: abortController.signal
+          });
+        } finally {
+          clearTimeout(timeoutId);
+        }
+
+        const responseTime = Date.now() - startTime;
+        const available = response.choices?.[0] ? true : false;
+        
+        // Record success in circuit breaker (as probe)
+        if (available) {
+          this.recordSuccess(responseTime, true);
+        }
+        
+        this.availabilityCache.set(cacheKey, { available, timestamp: Date.now() });
+        return available;
+      } else {
+        // Return cached result
+        return cached.available;
       }
-      
-      this.availabilityCache.set(cacheKey, { available, timestamp: Date.now() });
-      return available;
 
     } catch (error) {
-      // Track degradation start
-      if (!this.fallbackModeActive) {
-        this.degradationStartTime = Date.now();
-        this.fallbackModeActive = true;
-      }
+      // Record failure in circuit breaker (as probe)
+      this.recordFailure(error as Error, true);
       
       this.availabilityCache.set(cacheKey, { available: false, timestamp: Date.now() });
       return false;
@@ -293,22 +506,50 @@ export class NLPService {
     const systemPrompt = this.getSystemPrompt();
     const functionSchema = this.getFunctionSchema();
 
+    // Circuit breaker state is already checked in checkAIServiceAvailability()
+
     let retries = 0;
     const maxRetries = 3;
 
     while (retries < maxRetries) {
       try {
-        const response = await this.openai.chat.completions.create({
-          model: "gpt-4o",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: description }
-          ],
-          functions: [functionSchema],
-          function_call: { name: "extract_business_requirements" },
-          temperature: 0.3,
-          max_tokens: 1500
-        });
+        const startTime = Date.now();
+        
+        // Increment half-open calls if in half-open state - only before actual call
+        if (this.circuitState === CircuitState.HALF_OPEN) {
+          this.halfOpenCalls++;
+          // Check if we've exceeded the cap after incrementing
+          if (this.halfOpenCalls > this.circuitConfig.halfOpenMaxCalls) {
+            this.circuitState = CircuitState.OPEN;
+            this.nextAttemptTime = Date.now() + this.circuitConfig.resetTimeout;
+            throw new Error("Half-open call limit exceeded - circuit reopened");
+          }
+        }
+
+        // Use AbortController for proper timeout handling
+        const abortController = new AbortController();
+        const timeoutId = setTimeout(() => abortController.abort(), 30000); // 30 second timeout
+
+        let response;
+        try {
+          response = await this.openai.chat.completions.create({
+            model: "gpt-4o",
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: description }
+            ],
+            functions: [functionSchema],
+            function_call: { name: "extract_business_requirements" },
+            temperature: 0.3,
+            max_tokens: 1500
+          }, {
+            signal: abortController.signal
+          });
+        } finally {
+          clearTimeout(timeoutId);
+        }
+
+        const responseTime = Date.now() - startTime;
 
         const functionCall = response.choices[0]?.message?.function_call;
         if (!functionCall?.arguments) {
@@ -359,19 +600,31 @@ export class NLPService {
           ];
         }
 
+        // Record successful call in circuit breaker (production call)
+        this.recordSuccess(responseTime, false);
+
         // Cache the result
         this.setCachedResult(cacheKey, result);
 
         return result;
 
       } catch (error) {
+        // Record failure in circuit breaker (production call)
+        this.recordFailure(error as Error, false);
+
         retries++;
         if (retries >= maxRetries) {
           throw error;
         }
         
-        // Exponential backoff
-        await new Promise(resolve => setTimeout(resolve, Math.pow(2, retries) * 1000));
+        // Enhanced exponential backoff with jitter
+        const delay = this.calculateBackoffDelay(retries);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        
+        // Check circuit breaker again after delay
+        if (this.isCircuitOpen()) {
+          throw new Error("AI service circuit breaker opened during retry attempts");
+        }
       }
     }
 
