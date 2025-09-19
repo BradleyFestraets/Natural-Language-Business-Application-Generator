@@ -7,6 +7,7 @@ import { ApiEndpointGenerator } from "../generators/apiEndpointGenerator";
 import { DatabaseSchemaGenerator } from "../generators/databaseSchemaGenerator";
 import { WorkflowGenerationService } from "./workflowGenerationService";
 import { WorkflowUIGenerator } from "../generators/workflowUIGenerator";
+import { EmbeddedChatbotService } from "./embeddedChatbotService";
 import { ApplicationDeployer } from "../deployment/applicationDeployer";
 import { storage } from "../storage";
 import { join } from "path";
@@ -35,6 +36,7 @@ export interface GeneratedCode {
   databaseSchema: { [filename: string]: string };
   integrations: { [filename: string]: string };
   workflows: { [filename: string]: string };
+  chatbots: { [filename: string]: string };
   documentation: { [filename: string]: string };
 }
 
@@ -60,6 +62,7 @@ export class ApplicationGenerationService {
   private schemaGenerator: DatabaseSchemaGenerator;
   private workflowGenerator: WorkflowGenerationService;
   private workflowUIGenerator: WorkflowUIGenerator;
+  private chatbotService: EmbeddedChatbotService;
   private deployer: ApplicationDeployer;
 
   constructor() {
@@ -77,6 +80,7 @@ export class ApplicationGenerationService {
     this.schemaGenerator = new DatabaseSchemaGenerator();
     this.workflowGenerator = new WorkflowGenerationService();
     this.workflowUIGenerator = new WorkflowUIGenerator();
+    this.chatbotService = new EmbeddedChatbotService();
     this.deployer = new ApplicationDeployer();
   }
 
@@ -219,10 +223,12 @@ export class ApplicationGenerationService {
           workflowSystem.workflows,
           businessRequirement,
           {
-            includeRealTimeUpdates: true,
-            includeAccessControl: true,
-            uiFramework: "react",
-            styleFramework: "tailwind"
+            outputDir: join(workspaceDir, "src", "components", "workflow"),
+            includeProgressViews: true,
+            includeTaskViews: true,
+            includeApprovalViews: true,
+            styleTheme: "light",
+            componentLibrary: "shadcn"
           }
         );
         
@@ -238,8 +244,86 @@ export class ApplicationGenerationService {
           .map(([name, code]) => `// ${name}\n${code}`).join("\n\n");
         workflows["workflowDocumentation.md"] = workflowSystem.documentation;
       }
+
+      // Phase 6: Generate embedded chatbots if requested
+      let chatbots: { [filename: string]: string } = {};
+      if (finalOptions.includeChatbots) {
+        this.updateProgress(applicationId, {
+          stage: "integrating",
+          progress: 82,
+          message: "Generating AI chatbot system...",
+          currentComponent: "Embedded Chatbots",
+          estimatedTimeRemaining: 180
+        });
+
+        try {
+          // Create embedded chatbot for the generated application
+          const chatbotCapabilities = [
+            { type: 'form_help' as const, description: 'Form filling guidance', permissions: ['form:read', 'form:validate'] },
+            { type: 'validation' as const, description: 'Input validation assistance', permissions: ['validate:input'] },
+            { type: 'process_guidance' as const, description: 'Workflow and process guidance', permissions: ['workflow:read'] },
+            { type: 'contextual_assistance' as const, description: 'Context-aware help', permissions: ['context:read'] }
+          ];
+          
+          const chatbotResult = await this.chatbotService.createEmbeddedChatbot(
+            applicationId,
+            businessRequirement,
+            chatbotCapabilities,
+            {
+              tone: "professional",
+              style: "business",
+              proactiveness: "medium",
+              expertiseLevel: "intermediate"
+            }
+          );
+
+          // Generate chatbot integration documentation
+          chatbots["embeddedChatbot.md"] = `# Embedded AI Chatbot Integration
+
+## Overview
+This application includes an intelligent AI chatbot assistant that provides:
+- General help and navigation assistance
+- Form filling guidance and validation
+- Workflow status updates and next steps
+- Business domain-specific knowledge
+
+## Chatbot Details
+- **ID**: ${chatbotResult.id}
+- **Name**: ${chatbotResult.name}
+- **Capabilities**: ${chatbotResult.capabilities?.join(", ") || "general_help, form_help, navigation_help, workflow_help"}
+- **AI Model**: ${chatbotResult.aiModel}
+
+## Integration
+The chatbot is automatically embedded in your application and can be accessed:
+- Via the floating chat button in the bottom-right corner
+- Through the React component: \`<EmbeddedChatbot generatedApplicationId="${applicationId}" />\`
+- Via WebSocket for real-time communication
+- Through REST API fallback at \`/api/chatbot/interact\`
+
+## Customization
+You can customize the chatbot's behavior by updating its personality profile and knowledge base through the chatbot management interface.
+`;
+
+          this.updateProgress(applicationId, {
+            stage: "integrating",
+            progress: 83,
+            message: "AI chatbot system generated successfully",
+            estimatedTimeRemaining: 170
+          });
+
+        } catch (error) {
+          console.error("Failed to generate chatbot:", error);
+          this.updateProgress(applicationId, {
+            stage: "integrating", 
+            progress: 83,
+            message: "Chatbot generation failed, continuing without chatbot",
+            errors: [error instanceof Error ? error.message : "Unknown chatbot error"],
+            estimatedTimeRemaining: 170
+          });
+        }
+      }
       
-      // Phase 6: Generate integrations if requested
+      // Phase 7: Generate integrations if requested
       let integrations: { [filename: string]: string } = {};
       if (finalOptions.includeIntegrations) {
         integrations = await this.generateIntegrations(businessRequirement, generationPlan);
@@ -248,11 +332,11 @@ export class ApplicationGenerationService {
       this.updateProgress(applicationId, {
         stage: "integrating",
         progress: 85,
-        message: "Integrating components and workflows...",
+        message: "Integrating components, workflows, and chatbots...",
         estimatedTimeRemaining: 150
       });
 
-      // Phase 7: Generate documentation
+      // Phase 8: Generate documentation
       let documentation: { [filename: string]: string } = {};
       if (finalOptions.generateDocumentation) {
         documentation = await this.generateDocumentation(businessRequirement, {
@@ -261,6 +345,7 @@ export class ApplicationGenerationService {
           databaseSchema,
           integrations,
           workflows,
+          chatbots,
           documentation: {}
         });
       }
@@ -272,13 +357,14 @@ export class ApplicationGenerationService {
         estimatedTimeRemaining: 90
       });
 
-      // Phase 7: Validate generated code
+      // Phase 9: Validate generated code
       await this.validateGeneratedCode({
         components,
         apiEndpoints,
         databaseSchema,
         integrations,
         workflows,
+        chatbots,
         documentation
       });
 
@@ -335,6 +421,7 @@ export class ApplicationGenerationService {
           databaseSchema,
           integrations,
           workflows,
+          chatbots,
           documentation
         },
         metrics: {
@@ -364,6 +451,7 @@ export class ApplicationGenerationService {
           databaseSchema: {},
           integrations: {},
           workflows: {},
+          chatbots: {},
           documentation: {}
         },
         errors: [error instanceof Error ? error.message : "Unknown error"],
