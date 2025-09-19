@@ -8,6 +8,7 @@ import { insertBusinessRequirementSchema, insertGeneratedApplicationSchema, inse
 import { NLPService } from "./services/nlpService.js";
 import { ClarificationService } from "./services/clarificationService";
 import { ApplicationGenerationService } from "./services/applicationGenerationService";
+import { nlpAnalysisService } from "./services/nlpAnalysisService";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { requireAIServiceMiddleware, checkAIServiceMiddleware } from "./middleware/aiServiceMiddleware";
 import { globalServiceHealth } from "./config/validation";
@@ -178,6 +179,99 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         res.status(500).json({ message: "Internal server error parsing business description" });
       }
+    }
+  });
+
+  // Streaming NLP analysis with real-time progress updates
+  app.post("/api/nlp/parse-business-description/stream", isAuthenticated, requireAIServiceMiddleware, async (req: any, res: Response) => {
+    try {
+      const validatedData = parseBusinessDescriptionSchema.parse(req.body);
+      const { description, conversationId, context } = validatedData;
+      const userId = req.user.claims.sub;
+      
+      // Create analysis session ID for WebSocket tracking
+      const analysisSessionId = `nlp_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+      
+      // Store initial business requirement with pending status
+      const businessRequirement = await storage.createBusinessRequirement({
+        userId,
+        originalDescription: description,
+        extractedEntities: { processes: [], forms: [], approvals: [], integrations: [] },
+        workflowPatterns: [],
+        confidence: 0,
+        status: "analyzing"
+      });
+      
+      // Start streaming analysis in background
+      const onUpdate = (update: any) => {
+        nlpAnalysisService.updateProgress(analysisSessionId, {
+          businessRequirementId: businessRequirement.id,
+          status: update.status,
+          progress: update.progress,
+          message: update.message,
+          partialData: update.partialData
+        });
+      };
+      
+      // Use streaming NLP Service with real-time updates
+      nlpService.streamParseBusinessDescription(description, onUpdate)
+        .then(async (parseResult) => {
+          const extractedEntities = {
+            processes: parseResult.processes,
+            forms: parseResult.forms,
+            approvals: parseResult.approvals,
+            integrations: parseResult.integrations
+          };
+          
+          // Update stored business requirement with final results
+          await storage.updateBusinessRequirement(businessRequirement.id, {
+            extractedEntities,
+            workflowPatterns: parseResult.workflowPatterns,
+            confidence: parseResult.confidence,
+            status: "validated"
+          });
+          
+          // Send final completion update
+          nlpAnalysisService.updateProgress(analysisSessionId, {
+            businessRequirementId: businessRequirement.id,
+            status: "completed",
+            progress: 100,
+            message: "Analysis complete!",
+            finalResult: {
+              extractedEntities,
+              workflowPatterns: parseResult.workflowPatterns,
+              confidence: parseResult.confidence
+            }
+          });
+          
+          // Clean up after a delay
+          setTimeout(() => {
+            nlpAnalysisService.cleanupSession(analysisSessionId);
+          }, 30000); // Clean up after 30 seconds
+        })
+        .catch((error) => {
+          console.error("Streaming analysis failed:", error);
+          nlpAnalysisService.updateProgress(analysisSessionId, {
+            businessRequirementId: businessRequirement.id,
+            status: "error",
+            progress: 0,
+            message: "Analysis failed",
+            error: error.message
+          });
+        });
+      
+      res.status(200).json({
+        analysisSessionId,
+        businessRequirementId: businessRequirement.id,
+        status: "started",
+        websocketUrl: `/ws/nlp-analysis/${analysisSessionId}`
+      });
+    } catch (error) {
+      console.error("Failed to start streaming analysis:", error);
+      res.status(500).json({
+        error: "Failed to start analysis",
+        message: error instanceof Error ? error.message : "Unknown error"
+      });
     }
   });
   
@@ -641,7 +735,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "User authentication required" });
       }
       
-      const generatedApp = await storage.getGeneratedApplicationById(id);
+      const generatedApp = await storage.getGeneratedApplication(id);
       if (!generatedApp) {
         return res.status(404).json({ message: "Application not found" });
       }
@@ -687,6 +781,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const cookieHeader = request.headers.cookie;
     const sessionId = cookieHeader?.split(';').find(c => c.trim().startsWith('connect.sid='))?.split('=')[1];
     
+    // Handle NLP analysis progress WebSocket connections
+    if (pathname?.startsWith("/ws/nlp-analysis/")) {
+      const analysisSessionId = pathname.split("/").pop();
+      
+      if (!analysisSessionId) {
+        socket.destroy();
+        return;
+      }
+      
+      // Authenticate WebSocket connection
+      if (!sessionId) {
+        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+        socket.destroy();
+        return;
+      }
+      
+      // Proceed with WebSocket upgrade for NLP analysis
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        nlpAnalysisService.registerProgressClient(analysisSessionId, ws);
+        
+        ws.on('message', (message) => {
+          try {
+            const data = JSON.parse(message.toString());
+            if (data.type === 'ping') {
+              ws.send(JSON.stringify({ type: 'pong' }));
+            }
+          } catch (error) {
+            console.error('Invalid WebSocket message:', error);
+          }
+        });
+        
+        ws.on('close', () => {
+          console.log(`WebSocket client disconnected from NLP analysis ${analysisSessionId}`);
+        });
+        
+        ws.send(JSON.stringify({ 
+          type: 'connected', 
+          analysisSessionId,
+          message: 'Connected to NLP analysis progress updates'
+        }));
+      });
+      
+      return;
+    }
+    
     // Handle generation progress WebSocket connections
     if (pathname?.startsWith("/ws/generation-progress/")) {
       const applicationId = pathname.split("/").pop();
@@ -705,7 +844,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       try {
         // Verify ownership of the application
-        const generatedApp = await storage.getGeneratedApplicationById(applicationId);
+        const generatedApp = await storage.getGeneratedApplication(applicationId);
         if (!generatedApp) {
           socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
           socket.destroy();

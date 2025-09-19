@@ -111,8 +111,11 @@ export async function setupAuth(app: Express) {
     passport.use(strategy);
   }
 
-  // Add localhost strategy for development
-  if (process.env.NODE_ENV === "development") {
+  // Add localhost strategy for development (when NODE_ENV is development OR not production)
+  const isProduction = process.env.NODE_ENV === "production";
+  if (!isProduction) {
+    console.log("[AUTH] Registering localhost strategies for development environment");
+    
     const localhostStrategy = new Strategy(
       {
         name: "replitauth:127.0.0.1",
@@ -123,6 +126,7 @@ export async function setupAuth(app: Express) {
       verify,
     );
     passport.use(localhostStrategy);
+    console.log("[AUTH] Registered strategy: replitauth:127.0.0.1");
 
     // Also add localhost alias
     const localhostAliasStrategy = new Strategy(
@@ -135,20 +139,27 @@ export async function setupAuth(app: Express) {
       verify,
     );
     passport.use(localhostAliasStrategy);
+    console.log("[AUTH] Registered strategy: replitauth:localhost");
   }
 
   passport.serializeUser((user: Express.User, cb) => cb(null, user));
   passport.deserializeUser((user: Express.User, cb) => cb(null, user));
 
   app.get("/api/login", (req, res, next) => {
-    passport.authenticate(`replitauth:${req.hostname}`, {
+    const strategyName = `replitauth:${req.hostname}`;
+    console.log(`[AUTH] Attempting login with strategy: ${strategyName} for hostname: ${req.hostname}`);
+    
+    passport.authenticate(strategyName, {
       prompt: "login consent",
       scope: ["openid", "email", "profile", "offline_access"],
     })(req, res, next);
   });
 
   app.get("/api/callback", (req, res, next) => {
-    passport.authenticate(`replitauth:${req.hostname}`, {
+    const strategyName = `replitauth:${req.hostname}`;
+    console.log(`[AUTH] Processing callback with strategy: ${strategyName} for hostname: ${req.hostname}`);
+    
+    passport.authenticate(strategyName, {
       successReturnToOrRedirect: "/",
       failureRedirect: "/api/login",
     })(req, res, next);

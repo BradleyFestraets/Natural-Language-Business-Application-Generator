@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -11,8 +11,16 @@ export default function NaturalLanguageInputPage() {
   const [businessRequirementId, setBusinessRequirementId] = useState<string | null>(null);
   const [extractedData, setExtractedData] = useState<any>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  
+  // Streaming state
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingProgress, setStreamingProgress] = useState(0);
+  const [streamingStatus, setStreamingStatus] = useState<"analyzing" | "processing" | "completed" | "error" | null>(null);
+  const [streamingMessage, setStreamingMessage] = useState("");
+  
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
+  const websocketRef = useRef<WebSocket | null>(null);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -28,30 +36,105 @@ export default function NaturalLanguageInputPage() {
     }
   }, [isAuthenticated, isLoading, toast]);
 
-  // Mutation for parsing business description
+  // Cleanup WebSocket on unmount
+  useEffect(() => {
+    return () => {
+      if (websocketRef.current) {
+        websocketRef.current.close();
+      }
+    };
+  }, []);
+
+  // WebSocket connection management
+  const connectWebSocket = (analysisSessionId: string) => {
+    const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws/nlp-analysis/${analysisSessionId}`;
+    const ws = new WebSocket(wsUrl);
+    
+    ws.onopen = () => {
+      console.log('Connected to NLP analysis WebSocket');
+    };
+    
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        
+        if (data.type === 'nlp_progress') {
+          setStreamingProgress(data.progress || 0);
+          setStreamingStatus(data.status);
+          setStreamingMessage(data.message || "");
+          
+          // Update partial data during streaming
+          if (data.partialData) {
+            setExtractedData(data.partialData);
+          }
+          
+          // Handle completion
+          if (data.status === 'completed' && data.finalResult) {
+            setExtractedData({
+              processes: data.finalResult.extractedEntities.processes,
+              forms: data.finalResult.extractedEntities.forms,
+              approvals: data.finalResult.extractedEntities.approvals,
+              integrations: data.finalResult.extractedEntities.integrations,
+              workflowPatterns: data.finalResult.workflowPatterns,
+              confidence: data.finalResult.confidence
+            });
+            setIsStreaming(false);
+            toast({
+              title: "Requirements Analyzed",
+              description: `AI confidence: ${Math.round((data.finalResult.confidence || 0) * 100)}%`
+            });
+          }
+          
+          // Handle errors
+          if (data.status === 'error') {
+            setIsStreaming(false);
+            toast({
+              title: "Analysis Failed",
+              description: data.message || "Failed to analyze business requirements.",
+              variant: "destructive"
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error parsing WebSocket message:', error);
+      }
+    };
+    
+    ws.onclose = () => {
+      console.log('NLP analysis WebSocket disconnected');
+      setIsStreaming(false);
+    };
+    
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+      setIsStreaming(false);
+      toast({
+        title: "Connection Error",
+        description: "Lost connection to real-time analysis updates.",
+        variant: "destructive"
+      });
+    };
+    
+    websocketRef.current = ws;
+  };
+
+  // Mutation for streaming parsing business description
   const parseDescriptionMutation = useMutation({
     mutationFn: async (data: { description: string }) => {
-      const response = await apiRequest("POST", "/api/nlp/parse-business-description", {
+      const response = await apiRequest("POST", "/api/nlp/parse-business-description/stream", {
         description: data.description
-        // Note: userId now derived from authenticated session server-side
-        // Optional conversationId and context fields omitted
       });
       return response.json();
     },
     onSuccess: (data) => {
       setBusinessRequirementId(data.businessRequirementId);
-      setExtractedData({
-        processes: data.extractedEntities.processes,
-        forms: data.extractedEntities.forms,
-        approvals: data.extractedEntities.approvals,
-        integrations: data.extractedEntities.integrations,
-        workflowPatterns: data.workflowPatterns,
-        confidence: data.confidence
-      });
-      toast({
-        title: "Requirements Analyzed",
-        description: `AI confidence: ${Math.round(data.confidence * 100)}%`
-      });
+      setIsStreaming(true);
+      setStreamingProgress(0);
+      setStreamingStatus("analyzing");
+      setStreamingMessage("Starting AI analysis...");
+      
+      // Connect to WebSocket for real-time updates
+      connectWebSocket(data.analysisSessionId);
     },
     onError: (error) => {
       if (isUnauthorizedError(error as Error)) {
@@ -67,7 +150,7 @@ export default function NaturalLanguageInputPage() {
       }
       toast({
         title: "Analysis Failed",
-        description: "Failed to analyze business requirements. Please try again.",
+        description: "Failed to start analysis. Please try again.",
         variant: "destructive"
       });
     }
@@ -144,7 +227,11 @@ export default function NaturalLanguageInputPage() {
         <div className="space-y-6">
           <RequirementVisualization
             extractedData={extractedData}
-            isLoading={parseDescriptionMutation.isPending}
+            isLoading={parseDescriptionMutation.isPending || isStreaming}
+            isStreaming={isStreaming}
+            progress={streamingProgress}
+            status={streamingStatus}
+            message={streamingMessage}
             onGenerateApplication={handleGenerateApplication}
           />
         </div>

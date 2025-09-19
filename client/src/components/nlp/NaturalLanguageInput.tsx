@@ -3,7 +3,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Mic, Send, Sparkles } from "lucide-react";
-import VoiceInput from "./VoiceInput.js";
+import VoiceInput from "./VoiceInput";
 
 interface NaturalLanguageInputProps {
   onSubmit?: (data: { description: string }) => Promise<void> | void;
@@ -98,6 +98,8 @@ export default function NaturalLanguageInput({
             <VoiceInput 
               onTranscript={handleVoiceTranscript}
               disabled={isProcessing || isLoading || disabled}
+              showInterimResults={true}
+              showConfidence={true}
             />
           )}
           <Button
