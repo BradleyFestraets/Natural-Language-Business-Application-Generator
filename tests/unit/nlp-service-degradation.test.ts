@@ -25,11 +25,11 @@ describe("NLP Service Degradation & AI Availability", () => {
   let nlpService: NLPService;
   let mockOpenAI: any;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     
     // Get the mocked OpenAI constructor
-    const MockedOpenAI = vi.mocked(await import("openai")).default;
+    const MockedOpenAI = vi.mocked((await import("openai")).default);
     
     // Mock OpenAI with controllable failure modes
     mockOpenAI = {

@@ -180,9 +180,17 @@ export class NLPService {
 
     try {
       // Quick check - do we have an API key?
-      if (!process.env.OPENAI_API_KEY || !this.openai) {
+      if (!process.env.OPENAI_API_KEY) {
         this.availabilityCache.set(cacheKey, { available: false, timestamp: Date.now() });
         return false;
+      }
+
+      // Re-initialize OpenAI client if not available but API key exists
+      if (!this.openai && process.env.OPENAI_API_KEY) {
+        const OpenAI = (await import("openai")).default;
+        this.openai = new OpenAI({
+          apiKey: process.env.OPENAI_API_KEY
+        });
       }
 
       // Quick ping to OpenAI to check connectivity
@@ -548,6 +556,29 @@ export class NLPService {
   ): Promise<ExtractedBusinessData> {
     onUpdate({ status: "parsing", progress: 0, message: "Starting AI analysis..." });
 
+    // Check if AI service is available
+    const aiAvailable = await this.checkAIServiceAvailability();
+    
+    if (!aiAvailable) {
+      onUpdate({ 
+        status: "processing", 
+        progress: 50, 
+        message: "Using fallback mode - AI service unavailable" 
+      });
+      
+      // Simulate streaming with fallback
+      const result = this.parseWithFallback(description);
+      
+      onUpdate({
+        status: "completed",
+        partialData: result,
+        progress: 100,
+        message: "Fallback analysis complete!"
+      });
+      
+      return result;
+    }
+
     try {
       const systemPrompt = this.getSystemPrompt();
       const functionSchema = this.getFunctionSchema();
@@ -646,6 +677,28 @@ export class NLPService {
     description: string,
     context: ConversationContext[]
   ): Promise<ExtractedBusinessData> {
+    // Check if AI service is available
+    const aiAvailable = await this.checkAIServiceAvailability();
+    
+    if (!aiAvailable) {
+      // Use fallback parsing and try to extract some context
+      const fallbackResult = this.parseWithFallback(description);
+      
+      // Add context-based enhancements to fallback result
+      const contextKeywords = context.flatMap(c => 
+        c.content.toLowerCase().split(/\s+/).filter(w => w.length > 3)
+      );
+      
+      // Enhance industry detection with context
+      if (contextKeywords.some(k => ['hr', 'human', 'employee'].includes(k))) {
+        fallbackResult.businessContext.industry = "Human Resources";
+      } else if (contextKeywords.some(k => ['finance', 'money', 'budget'].includes(k))) {
+        fallbackResult.businessContext.industry = "Finance";
+      }
+      
+      return fallbackResult;
+    }
+
     const contextPrompt = this.buildContextPrompt(context);
     const systemPrompt = this.getSystemPrompt() + "\n\n" + contextPrompt;
     const functionSchema = this.getFunctionSchema();
