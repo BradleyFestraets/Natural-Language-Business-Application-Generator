@@ -329,7 +329,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Streaming NLP analysis with real-time progress updates
-  app.post("/api/nlp/parse-business-description/stream", isAuthenticated, requireAIServiceMiddleware, async (req: any, res: Response) => {
+  app.post("/api/nlp/parse-business-description/stream", isAuthenticated, requireOrganization, requireAIServiceMiddleware, async (req: any, res: Response) => {
     try {
       const validatedData = parseBusinessDescriptionSchema.parse(req.body);
       const { description, conversationId, context } = validatedData;
@@ -341,6 +341,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Store initial business requirement with pending status
       const businessRequirement = await storage.createBusinessRequirement({
         userId,
+        organizationId: req.organizationId, // SECURITY CRITICAL: Bind to user's organization
         originalDescription: description,
         extractedEntities: {
           businessContext: { industry: "General", criticality: "standard", scope: "department" },
@@ -360,6 +361,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         confidence: 0,
         status: "analyzing"
       });
+
+      // SECURITY CRITICAL: Create analysis session with organization tracking
+      nlpAnalysisService.createAnalysisSession(analysisSessionId, userId, req.organizationId, businessRequirement.id);
       
       // Start streaming analysis in background
       const onUpdate = (update: any) => {
@@ -992,21 +996,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         const userId = session.passport.user.id;
         
-        // SECURITY CRITICAL: For NLP analysis, we need to verify organization ownership
-        // Since analysisSessionId alone doesn't contain organization info, we need to derive it
-        // For now, we'll get the user's first active organization as a security measure
-        // TODO: Enhance NLP service to include organizationId in analysis session creation
-        const userOrgs = await storage.listUserOrganizations(userId);
-        if (userOrgs.length === 0) {
+        // SECURITY CRITICAL: Verify ownership of the specific analysis session
+        const sessionMetadata = nlpAnalysisService.getSessionMetadata(analysisSessionId);
+        if (!sessionMetadata) {
+          socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
+          socket.destroy();
+          return;
+        }
+        
+        // SECURITY CRITICAL: Verify user and organization ownership of the analysis session
+        if (!nlpAnalysisService.verifySessionOwnership(analysisSessionId, userId, sessionMetadata.organizationId)) {
           socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
           socket.destroy();
           return;
         }
         
-        // Additional security: verify the user has an active organization context
-        // This prevents users without proper organization membership from accessing NLP analysis
-        const hasActiveOrgMembership = await storage.hasOrgMembership(userId, userOrgs[0].id);
-        if (!hasActiveOrgMembership) {
+        // Additional verification: ensure user still has organization membership
+        const hasOrgAccess = await storage.hasOrgMembership(userId, sessionMetadata.organizationId);
+        if (!hasOrgAccess) {
           socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
           socket.destroy();
           return;

@@ -10,11 +10,21 @@ interface NLPProgress {
   error?: string;
 }
 
+interface AnalysisSessionMetadata {
+  analysisSessionId: string;
+  userId: string;
+  organizationId: string;
+  businessRequirementId: string;
+  createdAt: Date;
+}
+
 /**
  * Service for managing NLP analysis progress with WebSocket updates
+ * SECURITY CRITICAL: Tracks organization ownership for analysis sessions
  */
 class NLPAnalysisService {
   private activeAnalyses = new Map<string, WebSocket[]>();
+  private sessionMetadata = new Map<string, AnalysisSessionMetadata>();
 
   /**
    * Update analysis progress and broadcast to connected clients
@@ -32,6 +42,39 @@ class NLPAnalysisService {
         ws.send(message);
       }
     });
+  }
+
+  /**
+   * SECURITY CRITICAL: Create analysis session with organization tracking
+   */
+  createAnalysisSession(analysisSessionId: string, userId: string, organizationId: string, businessRequirementId: string): void {
+    this.sessionMetadata.set(analysisSessionId, {
+      analysisSessionId,
+      userId,
+      organizationId,
+      businessRequirementId,
+      createdAt: new Date()
+    });
+  }
+
+  /**
+   * SECURITY CRITICAL: Verify session ownership before WebSocket registration
+   */
+  verifySessionOwnership(analysisSessionId: string, userId: string, organizationId: string): boolean {
+    const metadata = this.sessionMetadata.get(analysisSessionId);
+    if (!metadata) {
+      return false;
+    }
+    
+    // Verify both user and organization ownership
+    return metadata.userId === userId && metadata.organizationId === organizationId;
+  }
+
+  /**
+   * Get session metadata for verification
+   */
+  getSessionMetadata(analysisSessionId: string): AnalysisSessionMetadata | undefined {
+    return this.sessionMetadata.get(analysisSessionId);
   }
 
   /**
@@ -53,6 +96,7 @@ class NLPAnalysisService {
    */
   cleanupSession(analysisSessionId: string): void {
     this.activeAnalyses.delete(analysisSessionId);
+    this.sessionMetadata.delete(analysisSessionId);
   }
 }
 
