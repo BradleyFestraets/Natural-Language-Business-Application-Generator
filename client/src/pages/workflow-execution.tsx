@@ -19,11 +19,11 @@ import {
   Send, 
   ArrowLeft,
   PlayCircle,
-  PauseCircle,
   AlertCircle
 } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { type WorkflowExecution } from "@shared/schema";
 
 interface WorkflowStep {
   id: string;
@@ -40,13 +40,11 @@ interface WorkflowStep {
   notes?: string;
 }
 
-interface WorkflowExecution {
-  id: string;
-  workflowId: string;
+// WorkflowExecution imported from shared schema
+// Extended interface for UI display with additional fields not in database schema
+interface WorkflowExecutionUI extends WorkflowExecution {
   workflowName: string;
-  status: "running" | "completed" | "failed" | "pending" | "paused";
   progress: number;
-  currentStep: string;
   steps: WorkflowStep[];
   startedAt: string;
   estimatedCompletion?: string;
@@ -68,11 +66,21 @@ export default function WorkflowExecution() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  // Fetch workflow execution details
-  const { data: execution, isLoading } = useQuery<WorkflowExecution>({
+  // Fetch workflow execution details with fallback defaults
+  const { data: rawExecution, isLoading } = useQuery<WorkflowExecutionUI>({
     queryKey: ["/api/workflows/executions", executionId],
     enabled: !!executionId
   });
+
+  // Add safety defaults for missing UI fields
+  const execution = rawExecution ? {
+    ...rawExecution,
+    workflowName: rawExecution.workflowName || rawExecution.workflowId || 'Unknown Workflow',
+    progress: rawExecution.progress || 0,
+    steps: rawExecution.steps || [],
+    startedAt: rawExecution.startedAt || rawExecution.createdAt,
+    context: rawExecution.context || {}
+  } : null;
 
   const form = useForm<StepActionForm>({
     resolver: zodResolver(stepActionSchema),
@@ -86,10 +94,8 @@ export default function WorkflowExecution() {
   // Step action mutation
   const stepActionMutation = useMutation({
     mutationFn: async (formData: StepActionForm) => {
-      return apiRequest(`/api/workflows/executions/${executionId}/advance`, {
-        method: "POST",
-        body: JSON.stringify(formData)
-      });
+      const response = await apiRequest("POST", `/api/workflows/executions/${executionId}/advance`, formData);
+      return response.json();
     },
     onSuccess: () => {
       toast({
@@ -108,36 +114,8 @@ export default function WorkflowExecution() {
     }
   });
 
-  // Pause/Resume workflow mutations
-  const pauseWorkflowMutation = useMutation({
-    mutationFn: async () => {
-      return apiRequest(`/api/workflows/executions/${executionId}/pause`, {
-        method: "POST"
-      });
-    },
-    onSuccess: () => {
-      toast({
-        title: "Workflow paused",
-        description: "The workflow has been paused"
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/workflows/executions", executionId] });
-    }
-  });
-
-  const resumeWorkflowMutation = useMutation({
-    mutationFn: async () => {
-      return apiRequest(`/api/workflows/executions/${executionId}/resume`, {
-        method: "POST"
-      });
-    },
-    onSuccess: () => {
-      toast({
-        title: "Workflow resumed",
-        description: "The workflow has been resumed"
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/workflows/executions", executionId] });
-    }
-  });
+  // Note: Pause/Resume functionality removed as schema has no "paused" state
+  // Only cancellation is supported for in-progress workflows
 
   const onSubmit = (data: StepActionForm) => {
     stepActionMutation.mutate(data);
@@ -154,10 +132,11 @@ export default function WorkflowExecution() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "running": return "bg-blue-500 text-white";
+      case "pending": return "bg-yellow-500 text-white";
+      case "in_progress": return "bg-blue-500 text-white";
       case "completed": return "bg-green-500 text-white";
       case "failed": return "bg-red-500 text-white";
-      case "paused": return "bg-yellow-500 text-white";
+      case "cancelled": return "bg-gray-500 text-white";
       default: return "bg-gray-500 text-white";
     }
   };
@@ -237,30 +216,8 @@ export default function WorkflowExecution() {
           >
             {execution.status}
           </Badge>
-          {execution.status === "running" && (
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => pauseWorkflowMutation.mutate()}
-              disabled={pauseWorkflowMutation.isPending}
-              data-testid="button-pause-workflow"
-            >
-              <PauseCircle className="w-4 h-4 mr-2" />
-              Pause
-            </Button>
-          )}
-          {execution.status === "paused" && (
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => resumeWorkflowMutation.mutate()}
-              disabled={resumeWorkflowMutation.isPending}
-              data-testid="button-resume-workflow"
-            >
-              <PlayCircle className="w-4 h-4 mr-2" />
-              Resume
-            </Button>
-          )}
+          {/* Pause/Resume functionality removed - schema has no "paused" state */}
+          {/* Note: Removed resume functionality as schema has no "paused" state - cancelled is terminal */}
         </div>
       </div>
 

@@ -7,20 +7,11 @@ import { Progress } from "@/components/ui/progress";
 import { Link, useLocation } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Play, Pause, Settings, Users, Clock, AlertCircle } from "lucide-react";
+import { Play, Settings, Users, Clock, AlertCircle } from "lucide-react";
+import { type WorkflowExecution, type GeneratedApplication } from "@shared/schema";
 
-interface WorkflowExecution {
-  id: string;
-  workflowId: string;
-  workflowName: string;
-  status: "running" | "completed" | "failed" | "pending";
-  progress: number;
-  currentStep: string;
-  startedAt: string;
-  estimatedCompletion?: string;
-  assignedTo?: string;
-}
-
+// WorkflowExecution and GeneratedApplication imported from shared schema
+// Local interface for workflow patterns (not in shared schema yet)
 interface WorkflowPattern {
   id: string;
   name: string;
@@ -32,16 +23,13 @@ interface WorkflowPattern {
   completedToday: number;
 }
 
-interface GeneratedApplication {
-  id: string;
-  name: string;
-  description: string;
-  status: "pending" | "generating" | "completed" | "failed";
-  completionPercentage: number;
-  organizationId: string;
-  businessRequirementId: string;
-  createdAt: string;
-  updatedAt: string;
+// Extended interface for UI display with additional fields
+interface WorkflowExecutionUI extends WorkflowExecution {
+  workflowName: string;
+  progress: number;
+  startedAt: string;
+  estimatedCompletion?: string;
+  assignedTo?: string;
 }
 
 interface StartWorkflowResponse {
@@ -59,7 +47,7 @@ export default function WorkflowDashboard() {
   });
 
   // Fetch active workflow executions
-  const { data: activeExecutions = [], isLoading: executionsLoading } = useQuery<WorkflowExecution[]>({
+  const { data: activeExecutions = [], isLoading: executionsLoading } = useQuery<WorkflowExecutionUI[]>({
     queryKey: ["/api/workflows/executions/active"],
     enabled: true
   });
@@ -100,8 +88,8 @@ export default function WorkflowDashboard() {
   });
 
   const handleStartWorkflow = async (workflowId: string) => {
-    // Get the first available application ID from completed applications
-    const availableApps = applications.filter(app => app.status === "completed");
+    // Get the first available application ID from completed or deployed applications
+    const availableApps = applications.filter(app => app.status === "completed" || app.status === "deployed");
     if (availableApps.length === 0) {
       toast({
         title: "No Applications Available",
@@ -121,10 +109,11 @@ export default function WorkflowDashboard() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "running": return "bg-blue-500";
+      case "in_progress": return "bg-blue-500";
       case "completed": return "bg-green-500";
       case "failed": return "bg-red-500";
       case "pending": return "bg-yellow-500";
+      case "cancelled": return "bg-gray-500";
       default: return "bg-gray-500";
     }
   };
@@ -202,7 +191,7 @@ export default function WorkflowDashboard() {
               <div>
                 <p className="text-sm text-muted-foreground">Active Executions</p>
                 <p className="text-2xl font-bold" data-testid="stat-active-executions">
-                  {activeExecutions.filter((e: WorkflowExecution) => e.status === "running").length}
+                  {activeExecutions.filter((e: WorkflowExecutionUI) => e.status === "in_progress").length}
                 </p>
               </div>
               <Play className="w-8 h-8 text-blue-600" />
@@ -216,9 +205,9 @@ export default function WorkflowDashboard() {
               <div>
                 <p className="text-sm text-muted-foreground">Completed Today</p>
                 <p className="text-2xl font-bold" data-testid="stat-completed-today">
-                  {activeExecutions.filter((e: WorkflowExecution) => 
+                  {activeExecutions.filter((e: WorkflowExecutionUI) => 
                     e.status === "completed" && 
-                    new Date(e.startedAt).toDateString() === new Date().toDateString()
+                    new Date(e.startedAt || e.createdAt).toDateString() === new Date().toDateString()
                   ).length}
                 </p>
               </div>
@@ -233,7 +222,7 @@ export default function WorkflowDashboard() {
               <div>
                 <p className="text-sm text-muted-foreground">Failed</p>
                 <p className="text-2xl font-bold" data-testid="stat-failed">
-                  {activeExecutions.filter((e: WorkflowExecution) => e.status === "failed").length}
+                  {activeExecutions.filter((e: WorkflowExecutionUI) => e.status === "failed").length}
                 </p>
               </div>
               <AlertCircle className="w-8 h-8 text-red-600" />
@@ -251,12 +240,12 @@ export default function WorkflowDashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {activeExecutions.map((execution: WorkflowExecution) => (
+              {activeExecutions.map((execution: WorkflowExecutionUI) => (
                 <div key={execution.id} className="flex items-center justify-between p-4 border rounded-lg hover-elevate">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
                       <h3 className="font-medium" data-testid={`execution-name-${execution.id}`}>
-                        {execution.workflowName}
+                        {execution.workflowName || execution.workflowId || 'Unknown Workflow'}
                       </h3>
                       <Badge 
                         variant="secondary" 
@@ -271,10 +260,10 @@ export default function WorkflowDashboard() {
                     </p>
                     <div className="flex items-center gap-4">
                       <div className="flex-1">
-                        <Progress value={execution.progress} className="h-2" />
+                        <Progress value={execution.progress || 0} className="h-2" />
                       </div>
                       <span className="text-sm text-muted-foreground" data-testid={`execution-progress-${execution.id}`}>
-                        {execution.progress}%
+                        {execution.progress || 0}%
                       </span>
                     </div>
                   </div>
@@ -353,7 +342,7 @@ export default function WorkflowDashboard() {
                   <Button 
                     className="w-full" 
                     onClick={() => handleStartWorkflow(workflow.id)}
-                    disabled={startWorkflowMutation.isPending || applications.filter(app => app.status === "completed").length === 0}
+                    disabled={startWorkflowMutation.isPending || applications.filter(app => app.status === "completed" || app.status === "deployed").length === 0}
                     data-testid={`button-start-workflow-${workflow.id}`}
                   >
                     <Play className="w-4 h-4 mr-2" />
