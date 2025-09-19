@@ -172,9 +172,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ===== PROCESS AUTOMATION ENGINE ENDPOINTS =====
   
   // Initialize Process Automation Engine and Monitoring Service (singletons)
-  const ProcessAutomationEngine = require("./engines/processAutomationEngine").ProcessAutomationEngine;
-  const ProcessMonitoringService = require("./services/processMonitoringService").ProcessMonitoringService;
-  const BusinessProcessConnector = require("./services/businessProcessConnector").BusinessProcessConnector;
+  const { ProcessAutomationEngine } = await import("./engines/processAutomationEngine");
+  const { ProcessMonitoringService } = await import("./services/processMonitoringService");
+  const { BusinessProcessConnector } = await import("./services/businessProcessConnector");
   
   const processAutomationEngine = new ProcessAutomationEngine({
     enableAIDecisions: true,
@@ -305,6 +305,215 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Report generation failed:", error);
       res.status(500).json({
         message: "Failed to generate performance report",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // ===== TEMPLATE GENERATION SYSTEM ENDPOINTS (Story 5.2) =====
+  
+  // Initialize Template Generation Service
+  const { templateGenerationService } = await import("./services/templateGenerationService");
+
+  // Zod validation schemas for Template Generation endpoints
+  const generateTemplateSchema = z.object({
+    applicationId: z.string().min(1, "Application ID is required"),
+    options: z.object({
+      includeForms: z.boolean().optional(),
+      includeWorkflows: z.boolean().optional(),
+      includeIntegrations: z.boolean().optional(),
+      customization: z.string().optional()
+    }).optional().default({})
+  });
+
+  const deployTemplateSchema = z.object({
+    applicationName: z.string().min(1, "Application name is required").max(100, "Name too long"),
+    customizations: z.record(z.any()).optional().default({}),
+    configuration: z.object({
+      environment: z.enum(["development", "staging", "production"]).optional(),
+      enableAI: z.boolean().optional(),
+      integrations: z.array(z.string()).optional()
+    }).optional().default({})
+  });
+
+  // Generate template from existing application
+  app.post("/api/templates/generate", isAuthenticated, requireOrganization, async (req: any, res: Response) => {
+    try {
+      // Validate request body
+      const validation = generateTemplateSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({
+          message: "Invalid request data",
+          errors: validation.error.errors.map(err => ({
+            field: err.path.join('.'),
+            message: err.message
+          }))
+        });
+      }
+
+      const { applicationId, options } = validation.data;
+      
+      // Mock application data for template generation
+      const mockApplication = {
+        id: applicationId,
+        name: `Business Application ${applicationId}`,
+        description: "AI-generated business application with workflows and forms",
+        organizationId: req.organizationId,
+        status: "completed",
+        workflowConfiguration: {
+          steps: [
+            { id: "step1", name: "Submit Request", type: "form" },
+            { id: "step2", name: "Manager Review", type: "approval" },
+            { id: "step3", name: "Final Processing", type: "automated_task" }
+          ]
+        },
+        formConfiguration: {
+          forms: [
+            { name: "Request Form", description: "Initial data collection" },
+            { name: "Approval Form", description: "Review and approval" }
+          ]
+        },
+        integrationConfiguration: {
+          externalServices: ["email_service", "notification_service"]
+        }
+      };
+
+      const template = await templateGenerationService.generateTemplate(mockApplication, undefined, options);
+      
+      res.status(201).json({
+        templateId: template.id,
+        name: template.name,
+        description: template.description,
+        category: template.category,
+        estimatedDeploymentTime: template.metadata.estimatedDeploymentTime,
+        customizationPoints: template.customizationPoints.length,
+        success: true
+      });
+
+    } catch (error) {
+      console.error("Template generation failed:", error);
+      res.status(500).json({
+        message: "Failed to generate template",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Get available templates with filtering
+  app.get("/api/templates", isAuthenticated, requireOrganization, async (req: any, res: Response) => {
+    try {
+      const filters = {
+        category: req.query.category,
+        industry: req.query.industry,
+        complexity: req.query.complexity,
+        search: req.query.search
+      };
+
+      const templates = await templateGenerationService.getAvailableTemplates(filters);
+      
+      res.status(200).json({
+        templates: templates.map(t => ({
+          id: t.id,
+          name: t.name,
+          description: t.description,
+          category: t.category,
+          complexity: t.metadata.complexity,
+          estimatedDeploymentTime: t.metadata.estimatedDeploymentTime,
+          tags: t.metadata.tags,
+          version: t.version,
+          createdAt: t.createdAt
+        })),
+        total: templates.length
+      });
+
+    } catch (error) {
+      console.error("Template retrieval failed:", error);
+      res.status(500).json({
+        message: "Failed to retrieve templates",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Deploy template to create new application
+  app.post("/api/templates/:templateId/deploy", isAuthenticated, requireOrganization, async (req: any, res: Response) => {
+    try {
+      const { templateId } = req.params;
+      
+      // Validate template ID
+      if (!templateId || typeof templateId !== 'string' || templateId.length === 0) {
+        return res.status(400).json({ message: "Valid template ID is required" });
+      }
+      
+      // Validate request body
+      const validation = deployTemplateSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({
+          message: "Invalid deployment data",
+          errors: validation.error.errors.map(err => ({
+            field: err.path.join('.'),
+            message: err.message
+          }))
+        });
+      }
+
+      const { applicationName, customizations, configuration } = validation.data;
+
+      const deploymentRequest = {
+        templateId,
+        organizationId: req.organizationId,
+        applicationName,
+        customizations,
+        configuration: {
+          environment: "development",
+          enableAI: true,
+          integrations: [],
+          ...configuration
+        }
+      };
+
+      const result = await templateGenerationService.deployTemplate(deploymentRequest);
+      
+      res.status(202).json({
+        deploymentId: result.deploymentId,
+        applicationId: result.applicationId,
+        status: result.status,
+        progress: result.progress,
+        estimatedCompletion: result.estimatedCompletion,
+        message: "Template deployment initiated successfully"
+      });
+
+    } catch (error) {
+      console.error("Template deployment failed:", error);
+      res.status(500).json({
+        message: "Failed to deploy template",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Get template details by ID
+  app.get("/api/templates/:templateId", isAuthenticated, requireOrganization, async (req: any, res: Response) => {
+    try {
+      const { templateId } = req.params;
+      
+      // Validate template ID
+      if (!templateId || typeof templateId !== 'string' || templateId.length === 0) {
+        return res.status(400).json({ message: "Valid template ID is required" });
+      }
+      
+      const template = await templateGenerationService.getTemplateById(templateId);
+      
+      if (!template) {
+        return res.status(404).json({ message: "Template not found" });
+      }
+
+      res.status(200).json(template);
+
+    } catch (error) {
+      console.error("Template retrieval failed:", error);
+      res.status(500).json({
+        message: "Failed to retrieve template",
         error: error instanceof Error ? error.message : "Unknown error"
       });
     }
