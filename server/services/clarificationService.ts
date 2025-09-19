@@ -301,11 +301,14 @@ Provide analysis with confidence score (0-1) and determine if follow-up is neede
       const refinedData = JSON.parse(functionCall.arguments);
 
       return {
+        businessContext: refinedData.businessContext || originalData.businessContext,
         processes: refinedData.processes || originalData.processes,
         forms: refinedData.forms || originalData.forms,
         approvals: refinedData.approvals || originalData.approvals,
         integrations: refinedData.integrations || originalData.integrations,
         workflowPatterns: refinedData.workflowPatterns || originalData.workflowPatterns,
+        riskAssessment: refinedData.riskAssessment || originalData.riskAssessment,
+        resourceRequirements: refinedData.resourceRequirements || originalData.resourceRequirements,
         confidence: refinedData.confidence || originalData.confidence,
         clarificationResponses: session.responses,
         refinementScore: refinedData.refinementScore || 0.8,
@@ -338,16 +341,25 @@ Prioritize the most critical missing information that would impact application g
   }
 
   private buildAnalysisPrompt(extractedData: ExtractedBusinessData, originalDescription: string): string {
+    const processNames = extractedData.processes?.map(p => p.name).join(", ") || "None identified";
+    const formNames = extractedData.forms?.map(f => f.name).join(", ") || "None identified";
+    const approvalNames = extractedData.approvals?.map(a => a.name).join(", ") || "None identified";
+    const integrationNames = extractedData.integrations?.map(i => i.name).join(", ") || "None identified";
+    const workflowNames = extractedData.workflowPatterns?.map(w => w.name).join(", ") || "None identified";
+    
     return `Analyze these extracted requirements for gaps and generate clarification questions:
 
 Original Description: ${originalDescription}
 
 Extracted Requirements:
-- Processes: ${extractedData.processes.join(", ") || "None identified"}
-- Forms: ${extractedData.forms.join(", ") || "None identified"}
-- Approvals: ${extractedData.approvals.join(", ") || "None identified"}
-- Integrations: ${extractedData.integrations.join(", ") || "None identified"}
-- Workflow Patterns: ${extractedData.workflowPatterns.join(", ") || "None identified"}
+- Business Context: ${extractedData.businessContext?.industry || "Unknown"} industry, ${extractedData.businessContext?.scope || "unknown"} scope
+- Processes: ${processNames}
+- Forms: ${formNames}
+- Approvals: ${approvalNames}
+- Integrations: ${integrationNames}
+- Workflow Patterns: ${workflowNames}
+- Risk Assessment: ${extractedData.riskAssessment?.securityRisks?.length || 0} security risks identified
+- Resource Requirements: ${extractedData.resourceRequirements?.technicalComplexity || "medium"} complexity, ${extractedData.resourceRequirements?.estimatedTimeframe || "unknown"} timeframe
 - Confidence: ${extractedData.confidence}
 
 Generate 1-3 targeted clarification questions that address the most critical gaps for application generation.`;
@@ -469,30 +481,105 @@ Generate enhanced requirements that integrate the clarification responses to imp
       parameters: {
         type: "object",
         properties: {
+          businessContext: {
+            type: "object",
+            properties: {
+              industry: { type: "string" },
+              criticality: { type: "string", enum: ["mission_critical", "important", "standard", "support"] },
+              scope: { type: "string", enum: ["department", "division", "enterprise"] },
+              complianceRequirements: { type: "array", items: { type: "string" } }
+            },
+            description: "Refined business context"
+          },
           processes: {
             type: "array",
-            items: { type: "string" },
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string" },
+                type: { type: "string", enum: ["core", "support", "governance", "integration"] },
+                description: { type: "string" },
+                complexity: { type: "string", enum: ["low", "medium", "high"] },
+                dependencies: { type: "array", items: { type: "string" } }
+              }
+            },
             description: "Refined list of business processes"
           },
           forms: {
             type: "array",
-            items: { type: "string" },
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string" },
+                purpose: { type: "string" },
+                complexity: { type: "string", enum: ["simple", "moderate", "complex"] },
+                dataTypes: { type: "array", items: { type: "string" } },
+                validationRules: { type: "array", items: { type: "string" } }
+              }
+            },
             description: "Refined list of required forms"
           },
           approvals: {
             type: "array",
-            items: { type: "string" },
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string" },
+                role: { type: "string" },
+                criteria: { type: "string" },
+                escalation: { type: "string" },
+                timeLimit: { type: "string" }
+              }
+            },
             description: "Refined list of approval steps"
           },
           integrations: {
             type: "array",
-            items: { type: "string" },
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string" },
+                type: { type: "string", enum: ["api", "database", "file_system", "email", "notification", "authentication"] },
+                purpose: { type: "string" },
+                criticality: { type: "string", enum: ["essential", "important", "optional"] },
+                dataFlow: { type: "string", enum: ["inbound", "outbound", "bidirectional"] }
+              }
+            },
             description: "Refined list of system integrations"
           },
           workflowPatterns: {
             type: "array",
-            items: { type: "string" },
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string" },
+                type: { type: "string", enum: ["sequential", "parallel", "conditional", "loop", "escalation", "approval_chain"] },
+                description: { type: "string" },
+                complexity: { type: "string", enum: ["simple", "moderate", "complex"] },
+                businessRules: { type: "array", items: { type: "string" } }
+              }
+            },
             description: "Refined list of workflow patterns"
+          },
+          riskAssessment: {
+            type: "object",
+            properties: {
+              securityRisks: { type: "array", items: { type: "string" } },
+              complianceRisks: { type: "array", items: { type: "string" } },
+              operationalRisks: { type: "array", items: { type: "string" } },
+              mitigationStrategies: { type: "array", items: { type: "string" } }
+            },
+            description: "Risk assessment with mitigation strategies"
+          },
+          resourceRequirements: {
+            type: "object",
+            properties: {
+              userRoles: { type: "array", items: { type: "string" } },
+              technicalComplexity: { type: "string", enum: ["low", "medium", "high"] },
+              estimatedTimeframe: { type: "string" },
+              infrastructureNeeds: { type: "array", items: { type: "string" } }
+            },
+            description: "Resource requirements and technical needs"
           },
           confidence: {
             type: "number",
@@ -524,7 +611,7 @@ Generate enhanced requirements that integrate the clarification responses to imp
             description: "Additional suggestions for improvement"
           }
         },
-        required: ["processes", "forms", "approvals", "integrations", "workflowPatterns", "confidence"]
+        required: ["businessContext", "processes", "forms", "approvals", "integrations", "workflowPatterns", "riskAssessment", "resourceRequirements", "confidence"]
       }
     };
   }

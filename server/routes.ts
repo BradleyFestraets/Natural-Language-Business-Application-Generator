@@ -12,6 +12,7 @@ import { nlpAnalysisService } from "./services/nlpAnalysisService";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { requireAIServiceMiddleware, checkAIServiceMiddleware } from "./middleware/aiServiceMiddleware";
 import { globalServiceHealth } from "./config/validation";
+import type { ExtractedBusinessData } from "./services/nlpService";
 import { 
   requireOrganization, 
   requirePermissions, 
@@ -74,6 +75,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const clarificationService = new ClarificationService();
   const applicationGenerationService = new ApplicationGenerationService();
   
+  // Helper function to convert database entities to service types
+  function convertToExtractedBusinessData(businessRequirement: any): ExtractedBusinessData {
+    return {
+      businessContext: {
+        industry: businessRequirement.extractedEntities?.businessContext?.industry || 'unknown',
+        criticality: (businessRequirement.extractedEntities?.businessContext?.criticality as any) || 'standard',
+        scope: (businessRequirement.extractedEntities?.businessContext?.scope as any) || 'department',
+        complianceRequirements: businessRequirement.extractedEntities?.businessContext?.complianceRequirements || []
+      },
+      processes: (businessRequirement.extractedEntities?.processes || []).map((p: any) => ({
+        name: p.name,
+        type: (p.type as any) || 'core',
+        description: p.description || '',
+        complexity: (p.complexity as any) || 'medium',
+        dependencies: p.dependencies || []
+      })),
+      forms: (businessRequirement.extractedEntities?.forms || []).map((f: any) => ({
+        name: f.name,
+        purpose: f.purpose || '',
+        complexity: (f.complexity as any) || 'moderate',
+        dataTypes: f.dataTypes || [],
+        validationRules: f.validationRules || []
+      })),
+      approvals: (businessRequirement.extractedEntities?.approvals || []).map((a: any) => ({
+        name: a.name,
+        role: a.role || '',
+        criteria: a.criteria || '',
+        escalation: a.escalation,
+        timeLimit: a.timeLimit
+      })),
+      integrations: (businessRequirement.extractedEntities?.integrations || []).map((i: any) => ({
+        name: i.name,
+        type: (i.type as any) || 'api',
+        purpose: i.purpose || '',
+        criticality: (i.criticality as any) || 'optional',
+        dataFlow: (i.dataFlow as any)
+      })),
+      workflowPatterns: Array.isArray(businessRequirement.extractedEntities?.workflowPatterns) && 
+        typeof businessRequirement.extractedEntities.workflowPatterns[0] === 'object' 
+        ? (businessRequirement.extractedEntities.workflowPatterns as any[]).map((w: any) => ({
+            name: w.name,
+            type: (w.type as any) || 'sequential',
+            description: w.description || '',
+            complexity: (w.complexity as any) || 'moderate',
+            businessRules: w.businessRules || []
+          }))
+        : [],
+      riskAssessment: {
+        securityRisks: businessRequirement.extractedEntities?.riskAssessment?.securityRisks || [],
+        complianceRisks: businessRequirement.extractedEntities?.riskAssessment?.complianceRisks || [],
+        operationalRisks: businessRequirement.extractedEntities?.riskAssessment?.operationalRisks || [],
+        mitigationStrategies: businessRequirement.extractedEntities?.riskAssessment?.mitigationStrategies || []
+      },
+      resourceRequirements: {
+        userRoles: businessRequirement.extractedEntities?.resourceRequirements?.userRoles || [],
+        technicalComplexity: (businessRequirement.extractedEntities?.resourceRequirements?.technicalComplexity as any) || 'medium',
+        estimatedTimeframe: businessRequirement.extractedEntities?.resourceRequirements?.estimatedTimeframe || 'unknown',
+        infrastructureNeeds: businessRequirement.extractedEntities?.resourceRequirements?.infrastructureNeeds || []
+      },
+      confidence: businessRequirement.confidence || 0.5
+    };
+  }
+  
   // Auth routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
@@ -113,12 +177,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     isAuthenticated, 
     requireOrganization('params'),
     requireOrgRead(),
-    async (req: AuthorizedRequest, res: Response) => {
+    async (req: any, res: Response) => {
       try {
         res.status(200).json({
           message: "Organization access granted",
-          organizationId: req.organizationId,
-          userPermissions: req.userPermissions,
+          organizationId: (req as AuthorizedRequest).organizationId,
+          userPermissions: (req as AuthorizedRequest).userPermissions,
           timestamp: new Date().toISOString()
         });
       } catch (error) {
@@ -352,16 +416,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Generate clarification questions
+      const extractedData = convertToExtractedBusinessData(businessRequirement);
+      
       const questions = await clarificationService.generateClarificationQuestions(
         businessRequirementId,
-        {
-          processes: businessRequirement.extractedEntities?.processes || [],
-          forms: businessRequirement.extractedEntities?.forms || [],
-          approvals: businessRequirement.extractedEntities?.approvals || [],
-          integrations: businessRequirement.extractedEntities?.integrations || [],
-          workflowPatterns: businessRequirement.workflowPatterns || [],
-          confidence: businessRequirement.confidence
-        },
+        extractedData,
         businessRequirement.originalDescription
       );
       
@@ -407,17 +466,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Validate response consistency
+      const extractedData = convertToExtractedBusinessData(businessRequirement);
+      
       const validationResult = await clarificationService.validateResponse(
         questionId,
         response,
-        {
-          processes: businessRequirement.extractedEntities?.processes || [],
-          forms: businessRequirement.extractedEntities?.forms || [],
-          approvals: businessRequirement.extractedEntities?.approvals || [],
-          integrations: businessRequirement.extractedEntities?.integrations || [],
-          workflowPatterns: businessRequirement.workflowPatterns || [],
-          confidence: businessRequirement.confidence
-        }
+        extractedData
       );
       
       // Process the response
@@ -469,16 +523,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Refine requirements using clarification responses
+      const extractedData = convertToExtractedBusinessData(businessRequirement);
       const refinedRequirements = await clarificationService.refineRequirements(
         sessionId,
-        {
-          processes: businessRequirement.extractedEntities?.processes || [],
-          forms: businessRequirement.extractedEntities?.forms || [],
-          approvals: businessRequirement.extractedEntities?.approvals || [],
-          integrations: businessRequirement.extractedEntities?.integrations || [],
-          workflowPatterns: businessRequirement.workflowPatterns || [],
-          confidence: businessRequirement.confidence
-        }
+        extractedData
       );
       
       // Update business requirement with refined data
@@ -783,7 +831,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         progress: generatedApp.completionPercentage,
         currentStep: getCurrentGenerationStep(generatedApp),
         estimatedTimeRemaining: calculateRemainingTime(generatedApp.completionPercentage || 0),
-        deploymentUrl: generatedApp.deploymentUrl || null,
+        deploymentUrl: (generatedApp as any).deploymentUrl || null,
         createdAt: generatedApp.createdAt,
         updatedAt: generatedApp.updatedAt
       });
