@@ -91,12 +91,18 @@ const refineRequirementsSchema = z.object({
   sessionId: z.string()
 });
 
-export async function registerRoutes(app: Express, injectedStorage?: IStorage): Promise<Server> {
+export async function registerRoutes(
+  app: Express, 
+  injectedStorage?: IStorage,
+  options?: { disableAuth?: boolean }
+): Promise<Server> {
   // Use injected storage for testing or default storage for production
   const storage = injectedStorage || defaultStorage;
   
-  // Set up authentication first
-  await setupAuth(app);
+  // Set up authentication first (unless disabled for testing)
+  if (!options?.disableAuth) {
+    await setupAuth(app);
+  }
   
   // Initialize NLP Service, Clarification Service, and Application Generation Service
   const nlpService = new NLPService();
@@ -107,10 +113,11 @@ export async function registerRoutes(app: Express, injectedStorage?: IStorage): 
   // ===== WORKFLOW MANAGEMENT ENDPOINTS =====
   
   // Get all available workflow patterns  
-  app.get("/api/workflows", isAuthenticated, requireOrganization, async (req: AuthorizedRequest, res: Response) => {
+  app.get("/api/workflows", isAuthenticated, requireOrganization(), async (req: Request, res: Response) => {
+    const authReq = req as AuthorizedRequest;
     try {
       // Get all generated applications for the organization to extract workflow patterns
-      const generatedApps = await storage.getGeneratedApplicationsByOrganization(req.organizationId!);
+      const generatedApps = await storage.getGeneratedApplicationsByOrganization(authReq.organizationId!);
       
       const workflows: any[] = [];
       
@@ -149,12 +156,13 @@ export async function registerRoutes(app: Express, injectedStorage?: IStorage): 
   });
   
   // Get active workflow executions - SECURITY CRITICAL: Organization scoped
-  app.get("/api/workflows/executions/active", isAuthenticated, requireOrganization, async (req: AuthorizedRequest, res: Response) => {
+  app.get("/api/workflows/executions/active", isAuthenticated, requireOrganization(), async (req: Request, res: Response) => {
+    const authReq = req as AuthorizedRequest;
     try {
-      const userId = req.user.claims.sub;
+      const userId = authReq.user.claims.sub;
       
       // SECURITY CRITICAL: Use organization-scoped execution listing to prevent cross-tenant data exposure
-      const organizationExecutions = await getWorkflowExecutionEngine().listUserExecutionsByOrg(userId, req.organizationId);
+      const organizationExecutions = await getWorkflowExecutionEngine().listUserExecutionsByOrg(userId, authReq.organizationId);
       
       // Filter for active executions (in_progress, pending) within the user's organization
       const activeExecutions = organizationExecutions.filter(execution => 
