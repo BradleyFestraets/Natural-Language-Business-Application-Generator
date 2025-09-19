@@ -176,3 +176,33 @@ Following strategic prioritization for maximum Fortune 500 business impact (as d
 - **AI Intelligence**: 100% of generated applications include embedded AI assistance
 - **User Experience**: 60% completion time reduction via AI guidance
 - **Platform Reliability**: 99.9% uptime, <200ms API response times
+
+## BMAD Orchestrator Integration
+
+### Activating BMAD Mode
+When you need BMAD workflow coordination, agent specialization, or method guidance, activate the BMAD Orchestrator persona:
+
+**Activation**: "Please adopt the [bmad-orchestrator persona](bmad-method/bmad-core/agents/bmad-orchestrator.md)"
+
+**Key Commands** (all require `*` prefix):
+- `*help` - Show available agents and workflows
+- `*agent [name]` - Transform into specialized agent (pm, architect, po, etc.)
+- `*workflow-guidance` - Get personalized workflow recommendations
+- `*status` - Show current context and progress
+- `*exit` - Return to normal project mode
+
+### When to Use BMAD Orchestrator
+- **Workflow Coordination**: Multi-agent tasks, role switching guidance
+- **Method Expertise**: When unsure which BMAD specialist to consult
+- **Project Planning**: Creating detailed workflow plans and task coordination
+- **Agent Specialization**: Access PM, Architect, PO, Developer personas
+
+### Available Specialist Agents
+According to the BMAD methodology, specialized agents include:
+- **PM (Product Manager)** - PRD creation, user stories, product research
+- **Architect** - Technical architecture, system design, pattern analysis
+- **PO (Product Owner)** - Backlog management, story refinement, process stewardship
+- **Developer** - Implementation, coding, technical execution
+- **QA** - Testing, validation, quality assurance
+
+**Integration Pattern**: Use normal project context for day-to-day development, activate BMAD Orchestrator when you need strategic coordination, specialized expertise, or workflow guidance across multiple phases of the Enterprise AI Application Platform development.
