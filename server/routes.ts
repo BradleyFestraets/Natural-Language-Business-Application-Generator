@@ -947,6 +947,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Set up WebSocket server for real-time updates
   const wss = new WebSocketServer({ server: httpServer });
 
+  // SECURITY CRITICAL: WebSocket CSRF Token Management
+  const wsTokenStore = new Map<string, { token: string, createdAt: Date, sessionId: string }>();
+  
+  // Generate anti-CSRF token for WebSocket connections
+  const generateWSCSRFToken = (sessionId: string): string => {
+    const token = require('crypto').randomBytes(32).toString('hex');
+    wsTokenStore.set(sessionId, {
+      token,
+      createdAt: new Date(),
+      sessionId
+    });
+    
+    // Clean up expired tokens (older than 5 minutes)
+    setTimeout(() => {
+      wsTokenStore.delete(sessionId);
+    }, 5 * 60 * 1000);
+    
+    return token;
+  };
+  
+  // Validate WebSocket CSRF token
+  const validateWSCSRFToken = (sessionId: string, providedToken: string): boolean => {
+    const stored = wsTokenStore.get(sessionId);
+    if (!stored) return false;
+    
+    // Check token age (5 minute TTL)
+    const age = Date.now() - stored.createdAt.getTime();
+    if (age > 5 * 60 * 1000) {
+      wsTokenStore.delete(sessionId);
+      return false;
+    }
+    
+    return stored.token === providedToken;
+  };
+
+  // Endpoint to get WebSocket CSRF token
+  app.get("/api/auth/ws-csrf-token", isAuthenticated, (req: any, res: Response) => {
+    const sessionId = req.sessionID;
+    const token = generateWSCSRFToken(sessionId);
+    res.json({ wscsrfToken: token });
+  });
+
   // Create session store for WebSocket authentication
   const pgStore = connectPg(session);
   const sessionStore = new pgStore({
@@ -956,13 +998,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
     tableName: "sessions",
   });
 
+  // SECURITY CRITICAL: Enhanced WebSocket CSRF Protection Utility
+  const validateWebSocketCSRF = (request: any, sessionId: string): boolean => {
+    const origin = request.headers.origin;
+    
+    // Bank-grade token transport: Use Sec-WebSocket-Protocol header instead of query params
+    const protocols = request.headers['sec-websocket-protocol']?.split(',').map((p: string) => p.trim()) || [];
+    const csrfProtocol = protocols.find((p: string) => p.startsWith('csrf-'));
+    const csrfToken = csrfProtocol?.replace('csrf-', '');
+    
+    // Build allowed origins from REPLIT_DOMAINS and localhost
+    const allowedOrigins = [
+      'https://localhost:5000',
+      'http://localhost:5000',
+      'http://127.0.0.1:5000',
+      'https://127.0.0.1:5000'
+    ];
+    
+    // Add production domains from REPLIT_DOMAINS (more robust than single REPLIT_DOMAIN)
+    if (process.env.REPLIT_DOMAINS) {
+      const domains = process.env.REPLIT_DOMAINS.split(',');
+      domains.forEach(domain => {
+        allowedOrigins.push(`https://${domain.trim()}`);
+      });
+    }
+    
+    // CRITICAL: Reject connections without Origin or with disallowed Origin
+    if (!origin || !allowedOrigins.includes(origin)) {
+      console.warn(`WebSocket CSRF: Rejected connection from origin: ${origin}`);
+      return false;
+    }
+    
+    // CRITICAL: Validate anti-CSRF token from Sec-WebSocket-Protocol header
+    if (!csrfToken || !validateWSCSRFToken(sessionId, csrfToken)) {
+      console.warn(`WebSocket CSRF: Invalid or missing CSRF token for session: ${sessionId}`);
+      return false;
+    }
+    
+    return true;
+  };
+
   // WebSocket upgrade handling for application generation progress with authentication
   httpServer.on("upgrade", async (request, socket, head) => {
     const { pathname } = url.parse(request.url || "");
     
-    // Parse cookies for session authentication
+    // Parse cookies for session authentication first (needed for CSRF validation)
     const cookieHeader = request.headers.cookie;
-    const sessionId = cookieHeader?.split(';').find(c => c.trim().startsWith('connect.sid='))?.split('=')[1];
+    const rawSessionCookie = cookieHeader?.split(';').find(c => c.trim().startsWith('connect.sid='))?.split('=')[1];
+    
+    // SECURITY CRITICAL: Unsign the session cookie to get the actual session ID
+    let sessionId: string | null = null;
+    if (rawSessionCookie) {
+      try {
+        const cookieSignature = require('cookie-signature');
+        const decodedCookie = decodeURIComponent(rawSessionCookie);
+        // Remove 's:' prefix and unsign with SESSION_SECRET
+        if (decodedCookie.startsWith('s:')) {
+          sessionId = cookieSignature.unsign(decodedCookie.slice(2), process.env.SESSION_SECRET!);
+        }
+      } catch (error) {
+        console.error('Failed to unsign session cookie:', error);
+      }
+    }
+    
+    // SECURITY CRITICAL: Enhanced CSRF Protection - Validate Origin header and anti-CSRF token
+    if (!sessionId || !validateWebSocketCSRF(request, sessionId)) {
+      socket.write('HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\n\r\nCSRF validation failed');
+      socket.destroy();
+      return;
+    }
     
     // Handle NLP analysis progress WebSocket connections
     if (pathname?.startsWith("/ws/nlp-analysis/")) {
