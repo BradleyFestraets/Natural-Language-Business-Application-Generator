@@ -168,6 +168,147 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Register workflow execution routes
   registerWorkflowRoutes(app);
+
+  // ===== PROCESS AUTOMATION ENGINE ENDPOINTS =====
+  
+  // Initialize Process Automation Engine and Monitoring Service (singletons)
+  const ProcessAutomationEngine = require("./engines/processAutomationEngine").ProcessAutomationEngine;
+  const ProcessMonitoringService = require("./services/processMonitoringService").ProcessMonitoringService;
+  const BusinessProcessConnector = require("./services/businessProcessConnector").BusinessProcessConnector;
+  
+  const processAutomationEngine = new ProcessAutomationEngine({
+    enableAIDecisions: true,
+    enableAutoRecovery: true,
+    enableRealTimeMonitoring: true,
+    maxRetryAttempts: 3,
+    escalationThreshold: 24
+  });
+  
+  const processMonitoringService = new ProcessMonitoringService();
+  const businessProcessConnector = new BusinessProcessConnector();
+
+  // Start automated business process
+  app.post("/api/process/start", isAuthenticated, async (req: any, res: Response) => {
+    try {
+      const { workflowId, businessRequirementId, initialData = {} } = req.body;
+      const userId = req.user.claims.sub;
+      const applicationId = req.body.applicationId || "default-app";
+
+      // Mock workflow pattern - in production would fetch from database
+      const workflowPattern = {
+        id: workflowId,
+        name: `Business Process ${workflowId}`,
+        description: "Automated business process workflow",
+        type: "sequential" as const,
+        steps: [
+          { 
+            id: "step1", 
+            name: "Initialize Process", 
+            type: "form" as const,
+            slaHours: 2,
+            escalationRules: [{ condition: "timeout", escalateTo: ["manager"] }],
+            validationRules: [],
+            automationLevel: "full" as const
+          }
+        ],
+        triggers: ["manual_start"],
+        metadata: {
+          estimatedDuration: 7,
+          complexity: "medium" as const,
+          category: "business" as const,
+          tags: ["automated", "ai-powered"]
+        }
+      };
+
+      const processExecution = await processAutomationEngine.startAutomatedProcess(
+        workflowPattern,
+        userId,
+        applicationId,
+        undefined,
+        initialData
+      );
+
+      // Wire monitoring
+      processMonitoringService.registerProcess(processExecution);
+
+      res.status(200).json({
+        executionId: processExecution.executionId,
+        status: processExecution.status,
+        progress: processExecution.progress,
+        currentStep: processExecution.currentStep,
+        estimatedCompletion: new Date(Date.now() + 15 * 60 * 1000).toISOString()
+      });
+
+    } catch (error) {
+      console.error("Process automation start failed:", error);
+      res.status(500).json({
+        message: "Failed to start automated process",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Get process analytics dashboard
+  app.get("/api/process/analytics", isAuthenticated, async (req: any, res: Response) => {
+    try {
+      const dashboard = processMonitoringService.getProcessDashboard();
+      res.status(200).json(dashboard);
+    } catch (error) {
+      console.error("Failed to get process analytics:", error);
+      res.status(500).json({
+        message: "Failed to retrieve process analytics",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Send business process notifications  
+  app.post("/api/process/notify", isAuthenticated, async (req: any, res: Response) => {
+    try {
+      const { type, recipients, message, subject, priority = "medium" } = req.body;
+      
+      const response = await businessProcessConnector.sendNotification(
+        type,
+        recipients,
+        message,
+        subject,
+        priority
+      );
+
+      res.status(200).json({
+        success: response.success,
+        messageId: response.data?.messageId,
+        recipients: recipients.length
+      });
+    } catch (error) {
+      console.error("Notification sending failed:", error);
+      res.status(500).json({
+        message: "Failed to send notification",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Generate process performance report
+  app.get("/api/process/reports/:timeRange", isAuthenticated, async (req: any, res: Response) => {
+    try {
+      const { timeRange = "day" } = req.params;
+      
+      const report = processMonitoringService.generatePerformanceReport(timeRange as "day" | "week" | "month");
+      
+      res.status(200).json({
+        timeRange,
+        generatedAt: new Date().toISOString(),
+        ...report
+      });
+    } catch (error) {
+      console.error("Report generation failed:", error);
+      res.status(500).json({
+        message: "Failed to generate performance report",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
   
   // Helper function to convert database entities to service types
   function convertToExtractedBusinessData(businessRequirement: any): ExtractedBusinessData {

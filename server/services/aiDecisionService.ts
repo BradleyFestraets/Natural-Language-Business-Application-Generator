@@ -109,18 +109,18 @@ export class AIDecisionService {
           { role: "system", content: this.getRoutingSystemPrompt() },
           { role: "user", content: decisionPrompt }
         ],
-        functions: [this.getRoutingFunctionSchema()],
-        function_call: { name: "make_routing_decision" },
+        tools: [{ type: "function", function: this.getRoutingFunctionSchema() }],
+        tool_choice: { type: "function", function: { name: "make_routing_decision" } },
         temperature: 0.2,
         max_tokens: 1500
       });
 
-      const functionCall = response.choices[0]?.message?.function_call;
-      if (!functionCall?.arguments) {
+      const toolCall = response.choices[0]?.message?.tool_calls?.[0];
+      if (!toolCall || toolCall.type !== "function" || !toolCall.function.arguments) {
         return this.getFallbackRoutingDecision(workflowPattern, currentStep);
       }
 
-      const aiDecision = JSON.parse(functionCall.arguments);
+      const aiDecision = JSON.parse(toolCall.function.arguments);
       const routingDecision: AIRoutingDecision = {
         nextStep: aiDecision.nextStep || this.getNextStep(workflowPattern, currentStep.id),
         assignee: aiDecision.assignee,
@@ -174,18 +174,18 @@ export class AIDecisionService {
           { role: "system", content: this.getValidationSystemPrompt() },
           { role: "user", content: validationPrompt }
         ],
-        functions: [this.getValidationFunctionSchema()],
-        function_call: { name: "validate_data" },
+        tools: [{ type: "function", function: this.getValidationFunctionSchema() }],
+        tool_choice: { type: "function", function: { name: "validate_data" } },
         temperature: 0.1,
         max_tokens: 1000
       });
 
-      const functionCall = response.choices[0]?.message?.function_call;
-      if (!functionCall?.arguments) {
+      const toolCall = response.choices[0]?.message?.tool_calls?.[0];
+      if (!toolCall || toolCall.type !== "function" || !toolCall.function.arguments) {
         return this.getFallbackValidation(data, step);
       }
 
-      const validationResult = JSON.parse(functionCall.arguments);
+      const validationResult = JSON.parse(toolCall.function.arguments);
       const aiValidation: AIValidationResult = {
         isValid: validationResult.isValid || true,
         score: validationResult.score || 0.8,
