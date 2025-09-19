@@ -649,6 +649,79 @@ export async function registerRoutes(
     }
   );
 
+  // ===== BUSINESS REQUIREMENTS ENDPOINTS =====
+  
+  /**
+   * Get business requirement by ID with multi-tenant isolation
+   */
+  app.get("/api/business-requirements/:id", isAuthenticated, requireOrganization(), async (req: AuthorizedRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const organizationId = req.organizationId;
+
+      const requirement = await storage.getBusinessRequirement(id);
+      
+      // Enforce multi-tenant isolation
+      if (!requirement || requirement.organizationId !== organizationId) {
+        return res.status(404).json({
+          error: "Business requirement not found",
+          message: "The requested business requirement does not exist or access is denied"
+        });
+      }
+
+      res.json(requirement);
+    } catch (error) {
+      console.error("Error fetching business requirement:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to fetch business requirement"
+      });
+    }
+  });
+
+  /**
+   * List business requirements with multi-tenant isolation
+   */
+  app.get("/api/business-requirements", isAuthenticated, requireOrganization(), async (req: AuthorizedRequest, res: Response) => {
+    try {
+      const organizationId = req.organizationId;
+      const requirements = await storage.listBusinessRequirements(organizationId);
+      res.json(requirements);
+    } catch (error) {
+      console.error("Error listing business requirements:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to list business requirements"
+      });
+    }
+  });
+
+  /**
+   * Create new business requirement
+   */
+  app.post("/api/business-requirements", isAuthenticated, requireOrganization(), async (req: AuthorizedRequest, res: Response) => {
+    try {
+      const organizationId = req.organizationId;
+      const userId = req.user.claims.sub;
+      
+      const requirementData = {
+        ...req.body,
+        organizationId,
+        userId,
+        createdAt: new Date().toISOString()
+      };
+
+      const requirement = await storage.createBusinessRequirement(requirementData);
+      res.status(201).json(requirement);
+    } catch (error) {
+      console.error("Error creating business requirement:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to create business requirement"
+      });
+    }
+  });
+
   // ===== NLP ENDPOINTS =====
   
   // Parse business description into structured requirements
