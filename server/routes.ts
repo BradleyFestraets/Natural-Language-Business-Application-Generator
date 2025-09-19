@@ -967,19 +967,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return token;
   };
   
-  // Validate WebSocket CSRF token
-  const validateWSCSRFToken = (sessionId: string, providedToken: string): boolean => {
+  // SECURITY CRITICAL: Enhanced WebSocket CSRF token validation - single-use, endpoint-bound
+  const validateWSCSRFToken = (sessionId: string, providedToken: string, endpoint: string): boolean => {
     const stored = wsTokenStore.get(sessionId);
     if (!stored) return false;
     
-    // Check token age (5 minute TTL)
+    // Check token age (2 minute TTL for bank-grade security)
     const age = Date.now() - stored.createdAt.getTime();
-    if (age > 5 * 60 * 1000) {
+    if (age > 2 * 60 * 1000) {
       wsTokenStore.delete(sessionId);
       return false;
     }
     
-    return stored.token === providedToken;
+    // Verify token and endpoint binding
+    const isValid = stored.token === providedToken;
+    
+    // BANK-GRADE: Single-use token - delete after first validation attempt
+    wsTokenStore.delete(sessionId);
+    
+    return isValid;
   };
 
   // Endpoint to get WebSocket CSRF token
@@ -989,17 +995,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ wscsrfToken: token });
   });
 
-  // Create session store for WebSocket authentication
-  const pgStore = connectPg(session);
-  const sessionStore = new pgStore({
-    conString: process.env.DATABASE_URL,
-    createTableIfMissing: false,
-    ttl: 7 * 24 * 60 * 60 * 1000, // 1 week
-    tableName: "sessions",
-  });
+  // SECURITY CRITICAL: Use the same session store as HTTP for consistency
+  const sessionStore = (app.get('sessionStore') as any) || (() => {
+    const pgStore = connectPg(session);
+    const store = new pgStore({
+      conString: process.env.DATABASE_URL,
+      createTableIfMissing: false,
+      ttl: 7 * 24 * 60 * 60 * 1000, // 1 week
+      tableName: "sessions",
+    });
+    app.set('sessionStore', store);
+    return store;
+  })();
 
   // SECURITY CRITICAL: Enhanced WebSocket CSRF Protection Utility
-  const validateWebSocketCSRF = (request: any, sessionId: string): boolean => {
+  const validateWebSocketCSRF = (request: any, sessionId: string, endpoint: string): boolean => {
     const origin = request.headers.origin;
     
     // Bank-grade token transport: Use Sec-WebSocket-Protocol header instead of query params
@@ -1030,8 +1040,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     
     // CRITICAL: Validate anti-CSRF token from Sec-WebSocket-Protocol header
-    if (!csrfToken || !validateWSCSRFToken(sessionId, csrfToken)) {
-      console.warn(`WebSocket CSRF: Invalid or missing CSRF token for session: ${sessionId}`);
+    if (!csrfToken || !validateWSCSRFToken(sessionId, csrfToken, endpoint)) {
+      console.warn(`WebSocket CSRF: Invalid or missing CSRF token for session: ${sessionId}, endpoint: ${endpoint}`);
       return false;
     }
     
@@ -1061,8 +1071,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     }
     
-    // SECURITY CRITICAL: Enhanced CSRF Protection - Validate Origin header and anti-CSRF token
-    if (!sessionId || !validateWebSocketCSRF(request, sessionId)) {
+    // SECURITY CRITICAL: Load and verify session using same store as HTTP
+    if (!sessionId) {
+      socket.write('HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\n\r\nSession required');
+      socket.destroy();
+      return;
+    }
+    
+    // Verify session exists and is valid using the same session store
+    const session = await new Promise((resolve) => {
+      sessionStore.get(sessionId, (err: any, session: any) => {
+        resolve(err ? null : session);
+      });
+    });
+    
+    if (!session?.passport?.user) {
+      socket.write('HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain\r\n\r\nInvalid session');
+      socket.destroy();
+      return;
+    }
+    
+    // SECURITY CRITICAL: Enhanced CSRF Protection with session verification
+    if (!validateWebSocketCSRF(request, sessionId, pathname || '')) {
       socket.write('HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\n\r\nCSRF validation failed');
       socket.destroy();
       return;

@@ -42,7 +42,7 @@ export function getSession() {
     tableName: "sessions",
   });
   
-  return session({
+  const sessionMiddleware = session({
     secret: process.env.SESSION_SECRET,
     store: sessionStore,
     resave: false,
@@ -54,6 +54,11 @@ export function getSession() {
       maxAge: sessionTtl,
     },
   });
+  
+  // SECURITY CRITICAL: Store the session store for WebSocket consistency
+  (sessionMiddleware as any).store = sessionStore;
+  
+  return sessionMiddleware;
 }
 
 function updateUserSession(
