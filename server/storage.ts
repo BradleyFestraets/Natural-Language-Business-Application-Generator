@@ -47,6 +47,7 @@ export interface IStorage {
   createWorkflowExecution(execution: InsertWorkflowExecution): Promise<WorkflowExecution>;
   updateWorkflowExecution(id: string, updates: Partial<InsertWorkflowExecution>): Promise<WorkflowExecution | undefined>;
   listWorkflowExecutions(userId: string, applicationId?: string): Promise<WorkflowExecution[]>;
+  listWorkflowExecutionsByOrg(userId: string, organizationId: string): Promise<WorkflowExecution[]>;
   deleteWorkflowExecution(id: string): Promise<boolean>;
 
   // ===== AUTHORIZATION & RBAC OPERATIONS =====
@@ -324,6 +325,21 @@ export class MemStorage implements IStorage {
     if (applicationId) {
       executions = executions.filter(execution => execution.generatedApplicationId === applicationId);
     }
+
+    return executions.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  async listWorkflowExecutionsByOrg(userId: string, organizationId: string): Promise<WorkflowExecution[]> {
+    // SECURITY CRITICAL: Filter executions by organization to prevent cross-tenant data exposure
+    const executions = Array.from(this.workflowExecutions.values())
+      .filter(execution => {
+        // First filter by user
+        if (execution.userId !== userId) return false;
+        
+        // Then check if the execution's application belongs to the organization
+        const app = this.generatedApplications.get(execution.generatedApplicationId);
+        return app && app.organizationId === organizationId;
+      });
 
     return executions.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }

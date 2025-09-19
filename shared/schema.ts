@@ -32,6 +32,7 @@ export type User = typeof users.$inferSelect;
 export const businessRequirements = pgTable("business_requirements", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id),
+  organizationId: varchar("organization_id").notNull().references(() => organizations.id),
   originalDescription: text("original_description").notNull(),
   extractedEntities: json("extracted_entities").$type<{
     businessContext?: {
@@ -118,6 +119,7 @@ export type BusinessRequirement = typeof businessRequirements.$inferSelect;
 export const generatedApplications = pgTable("generated_applications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   businessRequirementId: varchar("business_requirement_id").notNull().references(() => businessRequirements.id),
+  organizationId: varchar("organization_id").notNull().references(() => organizations.id),
   name: text("name").notNull(),
   description: text("description"),
   generatedWorkflows: json("generated_workflows").$type<Array<{

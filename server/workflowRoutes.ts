@@ -29,9 +29,8 @@ export function registerWorkflowRoutes(app: Express) {
       if (!businessRequirement) {
         return res.status(404).json({ message: "Business requirement not found" });
       }
-      // Verify the business requirement owner is in the organization
-      const orgMembership = await storage.getUserOrgMembership(businessRequirement.userId, req.organizationId);
-      if (!orgMembership || !orgMembership.isActive) {
+      // Verify application belongs to user's organization
+      if (generatedApp.organizationId !== req.organizationId) {
         return res.status(403).json({ message: "Access denied: Application not found in your organization" });
       }
       
@@ -122,6 +121,11 @@ export function registerWorkflowRoutes(app: Express) {
       const stepData = req.body;
       const userId = req.user.claims.sub;
       
+      // Verify execution ownership
+      if (!(await verifyExecutionOwnership(executionId, req.organizationId))) {
+        return res.status(403).json({ message: "Access denied: Execution not found in your organization" });
+      }
+      
       await getWorkflowExecutionEngine().advanceWorkflow(executionId, stepData, userId);
       
       const execution = await getWorkflowExecutionEngine().getExecutionStatus(executionId);
@@ -147,6 +151,11 @@ export function registerWorkflowRoutes(app: Express) {
     try {
       const { id: executionId } = req.params;
       
+      // Verify execution ownership
+      if (!(await verifyExecutionOwnership(executionId, req.organizationId))) {
+        return res.status(403).json({ message: "Access denied: Execution not found in your organization" });
+      }
+      
       const execution = await getWorkflowExecutionEngine().getExecutionStatus(executionId);
       if (!execution) {
         return res.status(404).json({ message: "Workflow execution not found" });
@@ -169,7 +178,8 @@ export function registerWorkflowRoutes(app: Express) {
     try {
       const userId = req.user.claims.sub;
       
-      const executions = await getWorkflowExecutionEngine().listUserExecutions(userId);
+      // Filter executions by organization to prevent cross-tenant data exposure
+      const executions = await getWorkflowExecutionEngine().listUserExecutionsByOrg(userId, req.organizationId);
       
       res.status(200).json({
         executions,
@@ -189,6 +199,11 @@ export function registerWorkflowRoutes(app: Express) {
     try {
       const { id: executionId } = req.params;
       const userId = req.user.claims.sub;
+      
+      // Verify execution ownership
+      if (!(await verifyExecutionOwnership(executionId, req.organizationId))) {
+        return res.status(403).json({ message: "Access denied: Execution not found in your organization" });
+      }
       
       await getWorkflowExecutionEngine().pauseWorkflow(executionId, userId);
       
@@ -215,6 +230,11 @@ export function registerWorkflowRoutes(app: Express) {
       const { id: executionId } = req.params;
       const userId = req.user.claims.sub;
       
+      // Verify execution ownership
+      if (!(await verifyExecutionOwnership(executionId, req.organizationId))) {
+        return res.status(403).json({ message: "Access denied: Execution not found in your organization" });
+      }
+      
       await getWorkflowExecutionEngine().resumeWorkflow(executionId, userId);
       
       const execution = await getWorkflowExecutionEngine().getExecutionStatus(executionId);
@@ -239,6 +259,11 @@ export function registerWorkflowRoutes(app: Express) {
     try {
       const { id: executionId } = req.params;
       const userId = req.user.claims.sub;
+      
+      // Verify execution ownership
+      if (!(await verifyExecutionOwnership(executionId, req.organizationId))) {
+        return res.status(403).json({ message: "Access denied: Execution not found in your organization" });
+      }
       
       await getWorkflowExecutionEngine().cancelWorkflow(executionId, userId);
       

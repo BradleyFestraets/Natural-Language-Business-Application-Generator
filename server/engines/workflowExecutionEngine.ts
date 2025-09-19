@@ -806,6 +806,79 @@ export class WorkflowExecutionEngine {
   }
 
   /**
+   * List user's workflow executions filtered by organization (security critical)
+   */
+  async listUserExecutionsByOrg(userId: string, organizationId: string): Promise<WorkflowExecution[]> {
+    return await storage.listWorkflowExecutionsByOrg(userId, organizationId);
+  }
+
+  /**
+   * Pause workflow execution
+   */
+  async pauseWorkflow(executionId: string, userId: string): Promise<void> {
+    const context = this.activeExecutions.get(executionId);
+    if (!context) {
+      throw new Error("Workflow execution not found");
+    }
+
+    await storage.updateWorkflowExecution(executionId, {
+      status: "pending"
+    });
+
+    await this.emitWorkflowEvent({
+      type: "step_completed",
+      executionId,
+      userId,
+      timestamp: new Date(),
+      data: { reason: "paused_by_user" }
+    });
+
+    this.clearEscalationTimer(executionId);
+
+    this.updateProgress(executionId, {
+      status: "paused",
+      currentStep: `Paused: ${context.currentStep}`,
+      progress: this.calculateProgress(await this.loadWorkflowPattern(context.workflowId), context.currentStep)
+    });
+  }
+
+  /**
+   * Resume workflow execution
+   */
+  async resumeWorkflow(executionId: string, userId: string): Promise<void> {
+    const context = this.activeExecutions.get(executionId);
+    if (!context) {
+      throw new Error("Workflow execution not found");
+    }
+
+    await storage.updateWorkflowExecution(executionId, {
+      status: "in_progress"
+    });
+
+    await this.emitWorkflowEvent({
+      type: "step_started",
+      executionId,
+      userId,
+      timestamp: new Date(),
+      data: { reason: "resumed_by_user" }
+    });
+
+    // Continue execution from current step
+    const workflowPattern = await this.loadWorkflowPattern(context.workflowId);
+    const currentStep = workflowPattern.steps.find(s => s.id === context.currentStep);
+    
+    if (currentStep) {
+      await this.executeStep(workflowPattern, context, currentStep);
+    }
+
+    this.updateProgress(executionId, {
+      status: "in_progress",
+      currentStep: currentStep?.name || context.currentStep,
+      progress: this.calculateProgress(workflowPattern, context.currentStep)
+    });
+  }
+
+  /**
    * Cancel workflow execution
    */
   async cancelWorkflow(executionId: string, userId: string): Promise<void> {

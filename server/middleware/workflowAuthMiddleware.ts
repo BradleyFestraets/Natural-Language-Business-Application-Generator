@@ -24,15 +24,8 @@ export async function verifyExecutionOwnership(executionId: string, organization
       return false;
     }
 
-    // Get the business requirement to check user ownership
-    const businessRequirement = await storage.getBusinessRequirement(generatedApp.businessRequirementId);
-    if (!businessRequirement) {
-      return false;
-    }
-
-    // Verify the business requirement owner is in the organization
-    const orgMembership = await storage.getUserOrgMembership(businessRequirement.userId, organizationId);
-    return orgMembership !== undefined && orgMembership.isActive;
+    // Verify application belongs to the organization
+    return generatedApp.organizationId === organizationId;
   } catch (error) {
     console.error("Error verifying execution ownership:", error);
     return false;
@@ -53,15 +46,8 @@ export async function verifyApplicationOwnership(applicationId: string, organiza
       return false;
     }
 
-    // Get the business requirement to check user ownership
-    const businessRequirement = await storage.getBusinessRequirement(generatedApp.businessRequirementId);
-    if (!businessRequirement) {
-      return false;
-    }
-
-    // Verify the business requirement owner is in the organization
-    const orgMembership = await storage.getUserOrgMembership(businessRequirement.userId, organizationId);
-    return orgMembership !== undefined && orgMembership.isActive;
+    // Verify application belongs to the organization
+    return generatedApp.organizationId === organizationId;
   } catch (error) {
     console.error("Error verifying application ownership:", error);
     return false;

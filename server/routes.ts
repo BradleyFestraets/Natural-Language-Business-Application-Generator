@@ -13,6 +13,8 @@ import { getWorkflowExecutionEngine } from "./engines/workflowExecutionEngineIns
 import { nlpAnalysisService } from "./services/nlpAnalysisService";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { registerWorkflowRoutes } from "./workflowRoutes";
+import session from "express-session";
+import connectPg from "connect-pg-simple";
 import { requireAIServiceMiddleware, checkAIServiceMiddleware } from "./middleware/aiServiceMiddleware";
 import { globalServiceHealth } from "./config/validation";
 import type { ExtractedBusinessData } from "./services/nlpService";
@@ -123,14 +125,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Get active workflow executions
+  // Get active workflow executions - SECURITY CRITICAL: Organization scoped
   app.get("/api/workflows/executions/active", isAuthenticated, requireOrganization, async (req: AuthorizedRequest, res: Response) => {
     try {
-      // Get all workflow executions and filter for active ones
-      const allExecutions = await getWorkflowExecutionEngine().getAllExecutions();
+      const userId = req.user.claims.sub;
       
-      // Filter for active executions (running, pending, paused)
-      const activeExecutions = allExecutions.filter(execution => 
+      // SECURITY CRITICAL: Use organization-scoped execution listing to prevent cross-tenant data exposure
+      const organizationExecutions = await getWorkflowExecutionEngine().listUserExecutionsByOrg(userId, req.organizationId);
+      
+      // Filter for active executions (running, pending, paused) within the user's organization
+      const activeExecutions = organizationExecutions.filter(execution => 
         ["running", "pending", "paused"].includes(execution.status)
       );
       
@@ -939,6 +943,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Set up WebSocket server for real-time updates
   const wss = new WebSocketServer({ server: httpServer });
 
+  // Create session store for WebSocket authentication
+  const pgStore = connectPg(session);
+  const sessionStore = new pgStore({
+    conString: process.env.DATABASE_URL,
+    createTableIfMissing: false,
+    ttl: 7 * 24 * 60 * 60 * 1000, // 1 week
+    tableName: "sessions",
+  });
+
   // WebSocket upgrade handling for application generation progress with authentication
   httpServer.on("upgrade", async (request, socket, head) => {
     const { pathname } = url.parse(request.url || "");
@@ -963,8 +976,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
       
-      // Proceed with WebSocket upgrade for NLP analysis
-      wss.handleUpgrade(request, socket, head, (ws) => {
+      try {
+        // SECURITY CRITICAL: Extract user session and organization for authorization
+        const session = await new Promise((resolve) => {
+          sessionStore.get(sessionId, (err: any, session: any) => {
+            resolve(err ? null : session);
+          });
+        });
+        
+        if (!session?.passport?.user) {
+          socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+          socket.destroy();
+          return;
+        }
+        
+        const userId = session.passport.user.id;
+        
+        // SECURITY CRITICAL: For NLP analysis, we need to verify organization ownership
+        // Since analysisSessionId alone doesn't contain organization info, we need to derive it
+        // For now, we'll get the user's first active organization as a security measure
+        // TODO: Enhance NLP service to include organizationId in analysis session creation
+        const userOrgs = await storage.listUserOrganizations(userId);
+        if (userOrgs.length === 0) {
+          socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+          socket.destroy();
+          return;
+        }
+        
+        // Additional security: verify the user has an active organization context
+        // This prevents users without proper organization membership from accessing NLP analysis
+        const hasActiveOrgMembership = await storage.hasOrgMembership(userId, userOrgs[0].id);
+        if (!hasActiveOrgMembership) {
+          socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+          socket.destroy();
+          return;
+        }
+        
+        // Proceed with WebSocket upgrade for NLP analysis
+        wss.handleUpgrade(request, socket, head, (ws) => {
         nlpAnalysisService.registerProgressClient(analysisSessionId, ws);
         
         ws.on('message', (message) => {
@@ -978,16 +1027,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         });
         
-        ws.on('close', () => {
-          console.log(`WebSocket client disconnected from NLP analysis ${analysisSessionId}`);
+          ws.on('close', () => {
+            console.log(`WebSocket client disconnected from NLP analysis ${analysisSessionId}`);
+          });
+          
+          ws.send(JSON.stringify({ 
+            type: 'connected', 
+            analysisSessionId,
+            message: 'Connected to NLP analysis progress updates'
+          }));
         });
         
-        ws.send(JSON.stringify({ 
-          type: 'connected', 
-          analysisSessionId,
-          message: 'Connected to NLP analysis progress updates'
-        }));
-      });
+      } catch (error) {
+        console.error('NLP WebSocket authentication error:', error);
+        socket.write('HTTP/1.1 500 Internal Server Error\r\n\r\n');
+        socket.destroy();
+      }
       
       return;
     }
@@ -1009,7 +1064,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       try {
-        // Verify ownership of the application
+        // SECURITY CRITICAL: Extract user session and organization for authorization
+        const session = await new Promise((resolve) => {
+          sessionStore.get(sessionId, (err, session) => {
+            resolve(err ? null : session);
+          });
+        });
+        
+        if (!session?.passport?.user) {
+          socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+          socket.destroy();
+          return;
+        }
+        
+        const userId = session.passport.user.id;
+        
+        // Verify application exists and belongs to user's organization
         const generatedApp = await storage.getGeneratedApplication(applicationId);
         if (!generatedApp) {
           socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
@@ -1017,9 +1087,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return;
         }
         
-        // Get business requirement to check ownership (simplified check)
-        const businessRequirement = await storage.getBusinessRequirement(generatedApp.businessRequirementId);
-        if (!businessRequirement) {
+        // SECURITY CRITICAL: Verify user has organization access to this application
+        const hasOrgAccess = await storage.hasOrgMembership(userId, generatedApp.organizationId);
+        if (!hasOrgAccess) {
           socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
           socket.destroy();
           return;
@@ -1076,7 +1146,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       try {
-        // Verify workflow execution exists and user has permission
+        // SECURITY CRITICAL: Extract user session and organization for authorization  
+        const session = await new Promise((resolve) => {
+          sessionStore.get(sessionId, (err, session) => {
+            resolve(err ? null : session);
+          });
+        });
+        
+        if (!session?.passport?.user) {
+          socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+          socket.destroy();
+          return;
+        }
+        
+        const userId = session.passport.user.id;
+        
+        // Verify workflow execution exists 
         const workflowExecution = await storage.getWorkflowExecution(executionId);
         if (!workflowExecution) {
           socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
@@ -1084,18 +1169,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return;
         }
         
-        // Check if user has permission to access this workflow execution
-        // Get the application to verify ownership
-        const generatedApp = await storage.getGeneratedApplication(workflowExecution.applicationId);
+        // Get the application to verify organization ownership
+        const generatedApp = await storage.getGeneratedApplication(workflowExecution.generatedApplicationId);
         if (!generatedApp) {
           socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
           socket.destroy();
           return;
         }
         
-        // Get business requirement to check ownership
-        const businessRequirement = await storage.getBusinessRequirement(generatedApp.businessRequirementId);
-        if (!businessRequirement) {
+        // SECURITY CRITICAL: Verify user has organization access to this workflow execution
+        const hasOrgAccess = await storage.hasOrgMembership(userId, generatedApp.organizationId);
+        if (!hasOrgAccess) {
           socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
           socket.destroy();
           return;
