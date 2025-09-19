@@ -245,24 +245,28 @@ export class ApplicationGenerationService {
         workflows["workflowDocumentation.md"] = workflowSystem.documentation;
       }
 
-      // Phase 6: Generate embedded chatbots if requested
+      // Phase 6: Generate embedded chatbots with custom agent tools if requested
       let chatbots: { [filename: string]: string } = {};
       if (finalOptions.includeChatbots) {
         this.updateProgress(applicationId, {
           stage: "integrating",
           progress: 82,
-          message: "Generating AI chatbot system...",
-          currentComponent: "Embedded Chatbots",
+          message: "Generating AI chatbot system with custom agent tools...",
+          currentComponent: "Embedded Chatbots & Agent Tools",
           estimatedTimeRemaining: 180
         });
 
         try {
-          // Create embedded chatbot for the generated application
+          // Generate business-specific agent tools based on extracted entities
+          const agentTools = await this.generateAgentTools(businessRequirement);
+          
+          // Create enhanced chatbot capabilities including generated tools
           const chatbotCapabilities = [
             { type: 'form_help' as const, description: 'Form filling guidance', permissions: ['form:read', 'form:validate'] },
             { type: 'validation' as const, description: 'Input validation assistance', permissions: ['validate:input'] },
             { type: 'process_guidance' as const, description: 'Workflow and process guidance', permissions: ['workflow:read'] },
-            { type: 'contextual_assistance' as const, description: 'Context-aware help', permissions: ['context:read'] }
+            { type: 'contextual_assistance' as const, description: 'Context-aware help', permissions: ['context:read'] },
+            ...agentTools.capabilities
           ];
           
           const chatbotResult = await this.chatbotService.createEmbeddedChatbot(
@@ -660,6 +664,131 @@ Generate TypeScript code for this integration with:
     } catch (error) {
       throw new Error(`Failed to generate integration ${integrationType}: ${error}`);
     }
+  }
+
+  /**
+   * Generate custom agent tools based on business requirements
+   */
+  private async generateAgentTools(
+    businessRequirement: BusinessRequirement
+  ): Promise<{ tools: { [filename: string]: string }, capabilities: any[] }> {
+    if (!isAIServiceAvailable() || !this.openai) {
+      return { tools: {}, capabilities: [] };
+    }
+
+    const agentToolsPrompt = `Generate custom AI agent tools for this business application:
+
+Business Requirement: ${businessRequirement.originalDescription}
+Business Context: ${JSON.stringify(businessRequirement.extractedEntities?.businessContext, null, 2)}
+Processes: ${JSON.stringify(businessRequirement.extractedEntities?.processes, null, 2)}
+Forms: ${JSON.stringify(businessRequirement.extractedEntities?.forms, null, 2)}
+Workflows: ${businessRequirement.workflowPatterns?.join(", ") || "None"}
+
+Generate TypeScript agent tools that can:
+1. Execute business-specific actions (e.g., validate employee data, process approvals)
+2. Query workflow and form states
+3. Provide intelligent automation for repetitive tasks
+4. Integrate with the business processes identified
+
+Each tool should:
+- Have a clear function signature with TypeScript types
+- Include proper error handling and validation
+- Provide meaningful responses for the AI agent
+- Follow enterprise security best practices
+
+Focus on tools that would genuinely help users complete their business tasks more efficiently.`;
+
+    try {
+      const response = await this.openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: "You are an expert AI agent tool developer. Generate production-ready agent tools that enhance business productivity." },
+          { role: "user", content: agentToolsPrompt }
+        ],
+        temperature: 0.2,
+        max_tokens: 3000
+      });
+
+      const toolsCode = response.choices[0]?.message?.content || "";
+      
+      // Parse the business context to determine domain-specific capabilities
+      const businessContext = businessRequirement.extractedEntities?.businessContext;
+      const industry = businessContext?.industry || 'general';
+      
+      const capabilities = this.generateCapabilitiesFromIndustry(industry, businessRequirement);
+      
+      return {
+        tools: {
+          "agentTools.ts": toolsCode,
+          "agentToolsConfig.json": JSON.stringify({
+            industry,
+            generatedAt: new Date().toISOString(),
+            capabilities: capabilities.map(c => c.type),
+            businessProcesses: businessRequirement.extractedEntities?.processes?.map(p => p.name) || []
+          }, null, 2)
+        },
+        capabilities
+      };
+    } catch (error) {
+      console.error("Failed to generate agent tools:", error);
+      return { tools: {}, capabilities: [] };
+    }
+  }
+
+  /**
+   * Generate domain-specific capabilities based on industry
+   */
+  private generateCapabilitiesFromIndustry(industry: string, businessRequirement: BusinessRequirement): any[] {
+    const baseCaps = [];
+    
+    // Industry-specific capabilities
+    switch (industry.toLowerCase()) {
+      case 'hr':
+      case 'human resources':
+        baseCaps.push(
+          { type: 'employee_data_management', description: 'Manage employee information and records', permissions: ['employee:read', 'employee:update'] },
+          { type: 'onboarding_automation', description: 'Automate onboarding workflows', permissions: ['workflow:execute', 'document:process'] },
+          { type: 'compliance_monitoring', description: 'Monitor HR compliance requirements', permissions: ['compliance:read', 'audit:create'] }
+        );
+        break;
+        
+      case 'finance':
+      case 'accounting':
+        baseCaps.push(
+          { type: 'expense_processing', description: 'Process and validate expense reports', permissions: ['expense:read', 'expense:validate'] },
+          { type: 'approval_routing', description: 'Route financial approvals efficiently', permissions: ['approval:route', 'workflow:execute'] },
+          { type: 'budget_analysis', description: 'Analyze budget allocations and spending', permissions: ['budget:read', 'analytics:generate'] }
+        );
+        break;
+        
+      case 'healthcare':
+        baseCaps.push(
+          { type: 'patient_data_management', description: 'Manage patient information securely', permissions: ['patient:read', 'hipaa:comply'] },
+          { type: 'appointment_scheduling', description: 'Intelligent appointment scheduling', permissions: ['schedule:manage', 'calendar:update'] },
+          { type: 'compliance_tracking', description: 'Track healthcare compliance requirements', permissions: ['compliance:monitor', 'audit:create'] }
+        );
+        break;
+        
+      default:
+        baseCaps.push(
+          { type: 'data_processing', description: 'Process and validate business data', permissions: ['data:read', 'data:validate'] },
+          { type: 'workflow_automation', description: 'Automate business workflows', permissions: ['workflow:execute', 'process:automate'] },
+          { type: 'document_management', description: 'Manage business documents', permissions: ['document:read', 'document:process'] }
+        );
+    }
+    
+    // Add process-specific capabilities
+    if (businessRequirement.extractedEntities?.processes) {
+      for (const process of businessRequirement.extractedEntities.processes) {
+        baseCaps.push({
+          type: `${process.name.toLowerCase().replace(/\s+/g, '_')}_assistance`,
+          description: `Provide assistance for ${process.name} process`,
+          permissions: ['process:read', 'process:execute']
+        });
+      }
+    }
+    
+    return baseCaps;
   }
 
   /**
