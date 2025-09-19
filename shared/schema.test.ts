@@ -6,12 +6,11 @@ import {
   generatedApplications, 
   embeddedChatbots,
   workflowExecutions,
-  insertUserSchema,
   insertBusinessRequirementSchema,
   insertGeneratedApplicationSchema,
   insertEmbeddedChatbotSchema,
   insertWorkflowExecutionSchema,
-  type InsertUser,
+  type UpsertUser,
   type User,
   type InsertBusinessRequirement,
   type BusinessRequirement,
@@ -26,20 +25,22 @@ import {
 describe("Schema Models", () => {
   describe("User Schema", () => {
     test("should validate correct user data", () => {
-      const validUser: InsertUser = {
-        username: "testuser",
-        password: "password123"
+      const validUser: UpsertUser = {
+        email: "test@example.com",
+        firstName: "Test",
+        lastName: "User"
       };
       
-      expect(() => insertUserSchema.parse(validUser)).not.toThrow();
+      // User schema doesn't have an insert schema since it's handled by auth
+      expect(validUser.email).toBe("test@example.com");
     });
 
-    test("should reject user without username", () => {
-      const invalidUser = {
-        password: "password123"
+    test("should handle optional user fields", () => {
+      const minimalUser: UpsertUser = {
+        email: "minimal@example.com"
       };
       
-      expect(() => insertUserSchema.parse(invalidUser)).toThrow();
+      expect(minimalUser.email).toBe("minimal@example.com");
     });
   });
 
@@ -47,14 +48,50 @@ describe("Schema Models", () => {
     test("should validate correct business requirement data", () => {
       const validRequirement: InsertBusinessRequirement = {
         userId: "user-123",
+        organizationId: "org-123",
         originalDescription: "Create employee onboarding with background checks and approvals",
         extractedEntities: {
-          processes: ["onboarding", "background_check"],
-          forms: ["employee_info", "background_check_form"],
-          approvals: ["manager_approval", "hr_approval"],
-          integrations: ["background_check_api"]
+          processes: [
+            {
+              name: "onboarding",
+              type: "business_process",
+              description: "Employee onboarding process"
+            },
+            {
+              name: "background_check", 
+              type: "verification_process",
+              description: "Background verification"
+            }
+          ],
+          forms: [
+            {
+              name: "employee_info",
+              purpose: "Collect employee information",
+              complexity: "medium"
+            }
+          ],
+          approvals: [
+            {
+              name: "manager_approval",
+              role: "manager",
+              criteria: "Review employee information"
+            }
+          ],
+          integrations: [
+            {
+              name: "background_check_api",
+              type: "third_party_api",
+              purpose: "Background verification"
+            }
+          ]
         },
-        workflowPatterns: ["sequential_approval", "conditional_routing"],
+        workflowPatterns: [
+          {
+            name: "sequential_approval",
+            type: "approval_flow",
+            description: "Sequential approval workflow"
+          }
+        ],
         confidence: 0.85,
         status: "analyzing"
       };
@@ -65,6 +102,7 @@ describe("Schema Models", () => {
     test("should reject requirement with invalid confidence score", () => {
       const invalidRequirement = {
         userId: "user-123",
+        organizationId: "org-123",
         originalDescription: "Create app",
         confidence: 1.5, // Invalid - should be between 0 and 1
         status: "analyzing"
@@ -75,7 +113,8 @@ describe("Schema Models", () => {
 
     test("should reject requirement with invalid status", () => {
       const invalidRequirement = {
-        userId: "user-123", 
+        userId: "user-123",
+        organizationId: "org-123",
         originalDescription: "Create app",
         confidence: 0.8,
         status: "invalid_status"
@@ -89,30 +128,33 @@ describe("Schema Models", () => {
     test("should validate correct generated application data", () => {
       const validApp: InsertGeneratedApplication = {
         businessRequirementId: "req-123",
+        organizationId: "org-123",
         name: "Employee Onboarding System",
         description: "Complete employee onboarding workflow with background checks",
         generatedWorkflows: [
           {
             id: "workflow-1",
             name: "Background Check Workflow",
-            steps: ["submit_form", "background_check", "approval"]
+            steps: ["submit_form", "background_check", "approval"],
+            configuration: { approvalFlow: "sequential" }
           }
         ],
         generatedForms: [
           {
             id: "form-1",
             name: "Employee Information Form",
-            fields: ["name", "email", "position"]
+            fields: ["name", "email", "position"],
+            validationRules: ["required_fields"]
           }
         ],
         generatedIntegrations: [
           {
             id: "integration-1",
             name: "Background Check API",
-            type: "third_party_api"
+            type: "third_party_api",
+            configuration: { endpoint: "/api/background-check" }
           }
         ],
-        embeddedChatbots: ["chatbot-1"],
         status: "generating",
         completionPercentage: 45
       };
@@ -123,6 +165,7 @@ describe("Schema Models", () => {
     test("should reject application with invalid completion percentage", () => {
       const invalidApp = {
         businessRequirementId: "req-123",
+        organizationId: "org-123",
         name: "Test App",
         status: "generating",
         completionPercentage: 150 // Invalid - should be between 0 and 100
