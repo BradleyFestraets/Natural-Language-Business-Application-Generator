@@ -12,6 +12,7 @@ import { ComputerUseService } from "./computerUseService";
 import { ApplicationDeployer } from "../deployment/applicationDeployer";
 import { storage } from "../storage";
 import { join } from "path";
+import { ImageVideoGenerationService } from "./imageVideoGenerationService";
 
 export interface GenerationOptions {
   includeWorkflows?: boolean;
@@ -40,6 +41,7 @@ export interface GeneratedCode {
   chatbots: { [filename: string]: string };
   computerUse: { [filename: string]: string };
   documentation: { [filename: string]: string };
+  visualAssets?: any; // Placeholder for visual assets
 }
 
 export interface GenerationResult {
@@ -67,6 +69,7 @@ export class ApplicationGenerationService {
   private chatbotService: EmbeddedChatbotService;
   private computerUseService: ComputerUseService;
   private deployer: ApplicationDeployer;
+  private imageVideoService: ImageVideoGenerationService;
 
   constructor() {
     if (process.env.OPENAI_API_KEY) {
@@ -76,7 +79,7 @@ export class ApplicationGenerationService {
     } else {
       this.openai = null as any;
     }
-    
+
     // Initialize concrete generators
     this.reactGenerator = new ReactComponentGenerator();
     this.apiGenerator = new ApiEndpointGenerator();
@@ -86,6 +89,7 @@ export class ApplicationGenerationService {
     this.chatbotService = new EmbeddedChatbotService();
     this.computerUseService = new ComputerUseService();
     this.deployer = new ApplicationDeployer();
+    this.imageVideoService = new ImageVideoGenerationService();
   }
 
   /**
@@ -98,7 +102,7 @@ export class ApplicationGenerationService {
   ): Promise<GenerationResult> {
     const startTime = Date.now();
     const applicationId = generatedApp.id;
-    
+
     try {
       // Initialize default options
       const finalOptions = {
@@ -120,7 +124,7 @@ export class ApplicationGenerationService {
 
       // Phase 1: Analyze requirements and create generation plan
       const generationPlan = await this.analyzeRequirements(businessRequirement, finalOptions);
-      
+
       this.updateProgress(applicationId, {
         stage: "analyzing",
         progress: 10,
@@ -150,7 +154,7 @@ export class ApplicationGenerationService {
         includeTypes: true,
         includeTests: false
       });
-      
+
       this.updateProgress(applicationId, {
         stage: "generating_components",
         progress: 35,
@@ -172,7 +176,7 @@ export class ApplicationGenerationService {
         includeValidation: true,
         authRequired: true
       });
-      
+
       this.updateProgress(applicationId, {
         stage: "generating_api",
         progress: 55,
@@ -195,7 +199,7 @@ export class ApplicationGenerationService {
         includeMigrations: false,
         databaseType: "postgresql"
       });
-      
+
       this.updateProgress(applicationId, {
         stage: "generating_database",
         progress: 75,
@@ -213,7 +217,7 @@ export class ApplicationGenerationService {
           currentComponent: "Workflow System",
           estimatedTimeRemaining: 200
         });
-        
+
         const workflowSystem = await this.workflowGenerator.generateWorkflowSystem(businessRequirement, {
           includeApprovals: true,
           includeNotifications: true,
@@ -221,7 +225,7 @@ export class ApplicationGenerationService {
           generateUI: false, // Let WorkflowUIGenerator handle UI
           complexity: "advanced"
         });
-        
+
         // Generate comprehensive workflow UI using WorkflowUIGenerator
         const workflowUIResult = await this.workflowUIGenerator.generateWorkflowUI(
           workflowSystem.workflows,
@@ -235,7 +239,7 @@ export class ApplicationGenerationService {
             componentLibrary: "shadcn"
           }
         );
-        
+
         // Store workflow patterns and comprehensive UI components
         workflows["workflowPatterns.ts"] = JSON.stringify(workflowSystem.workflows, null, 2);
         workflows["workflowUIComponents.ts"] = Object.entries(workflowUIResult.components)
@@ -309,7 +313,7 @@ export class ApplicationGenerationService {
         try {
           // Generate business-specific agent tools based on extracted entities
           const agentTools = await this.generateAgentTools(businessRequirement);
-          
+
           // Create enhanced chatbot capabilities including generated tools
           const chatbotCapabilities = [
             { type: 'form_help' as const, description: 'Form filling guidance', permissions: ['form:read', 'form:validate'] },
@@ -318,7 +322,7 @@ export class ApplicationGenerationService {
             { type: 'contextual_assistance' as const, description: 'Context-aware help', permissions: ['context:read'] },
             ...agentTools.capabilities
           ];
-          
+
           const chatbotResult = await this.chatbotService.createEmbeddedChatbot(
             applicationId,
             businessRequirement,
@@ -368,7 +372,7 @@ You can customize the chatbot's behavior by updating its personality profile and
         } catch (error) {
           console.error("Failed to generate chatbot:", error);
           this.updateProgress(applicationId, {
-            stage: "integrating", 
+            stage: "integrating",
             progress: 83,
             message: "Chatbot generation failed, continuing without chatbot",
             errors: [error instanceof Error ? error.message : "Unknown chatbot error"],
@@ -376,7 +380,7 @@ You can customize the chatbot's behavior by updating its personality profile and
           });
         }
       }
-      
+
       // Phase 8: Generate integrations if requested
       let integrations: { [filename: string]: string } = {};
       if (finalOptions.includeIntegrations) {
@@ -390,7 +394,18 @@ You can customize the chatbot's behavior by updating its personality profile and
         estimatedTimeRemaining: 150
       });
 
-      // Phase 8: Generate documentation
+      // Phase 9: Generate visual assets
+      const visualAssets = await this.imageVideoService.generateVisualAssetPackage(
+        businessRequirement,
+        {
+          applicationId,
+          workflows: Object.keys(workflows).length,
+          forms: Object.keys(components).length, // Assuming components represent forms for this context
+          industry: businessRequirement.extractedEntities?.businessContext?.industry
+        }
+      );
+
+      // Phase 10: Generate documentation
       let documentation: { [filename: string]: string } = {};
       if (finalOptions.generateDocumentation) {
         documentation = await this.generateDocumentation(businessRequirement, {
@@ -412,7 +427,7 @@ You can customize the chatbot's behavior by updating its personality profile and
         estimatedTimeRemaining: 90
       });
 
-      // Phase 9: Validate generated code
+      // Phase 11: Validate generated code
       await this.validateGeneratedCode({
         components,
         apiEndpoints,
@@ -431,7 +446,7 @@ You can customize the chatbot's behavior by updating its personality profile and
         estimatedTimeRemaining: 60
       });
 
-      // Phase 8: Deploy application using deployment pipeline with pre-generated code
+      // Phase 12: Deploy application using deployment pipeline with pre-generated code
       const deploymentResult = await this.deployer.deployApplication(
         businessRequirement,
         generatedApp,
@@ -458,7 +473,7 @@ You can customize the chatbot's behavior by updating its personality profile and
       this.updateProgress(applicationId, {
         stage: "completed",
         progress: 100,
-        message: deploymentResult.success 
+        message: deploymentResult.success
           ? `Application deployed successfully to ${deploymentResult.deploymentUrl}!`
           : "Application generation completed with deployment warnings",
         estimatedTimeRemaining: 0
@@ -479,7 +494,8 @@ You can customize the chatbot's behavior by updating its personality profile and
           workflows,
           chatbots,
           computerUse,
-          documentation
+          documentation,
+          visualAssets // Include visualAssets in the final result
         },
         metrics: {
           totalDuration: duration,
@@ -491,7 +507,7 @@ You can customize the chatbot's behavior by updating its personality profile and
 
     } catch (error) {
       console.error("Application generation failed:", error);
-      
+
       this.updateProgress(applicationId, {
         stage: "failed",
         progress: 0,
@@ -547,6 +563,7 @@ Create a comprehensive plan for generating:
 3. Database tables and relationships
 4. External integrations required
 5. AI chatbot capabilities
+6. Image and Video generation capabilities
 
 Focus on enterprise-grade patterns with TypeScript, proper error handling, and scalability.`;
 
@@ -764,13 +781,13 @@ Focus on tools that would genuinely help users complete their business tasks mor
       });
 
       const toolsCode = response.choices[0]?.message?.content || "";
-      
+
       // Parse the business context to determine domain-specific capabilities
       const businessContext = businessRequirement.extractedEntities?.businessContext;
       const industry = businessContext?.industry || 'general';
-      
+
       const capabilities = this.generateCapabilitiesFromIndustry(industry, businessRequirement);
-      
+
       return {
         tools: {
           "agentTools.ts": toolsCode,
@@ -794,7 +811,7 @@ Focus on tools that would genuinely help users complete their business tasks mor
    */
   private generateCapabilitiesFromIndustry(industry: string, businessRequirement: BusinessRequirement): any[] {
     const baseCaps = [];
-    
+
     // Industry-specific capabilities
     switch (industry.toLowerCase()) {
       case 'hr':
@@ -805,7 +822,7 @@ Focus on tools that would genuinely help users complete their business tasks mor
           { type: 'compliance_monitoring', description: 'Monitor HR compliance requirements', permissions: ['compliance:read', 'audit:create'] }
         );
         break;
-        
+
       case 'finance':
       case 'accounting':
         baseCaps.push(
@@ -814,7 +831,7 @@ Focus on tools that would genuinely help users complete their business tasks mor
           { type: 'budget_analysis', description: 'Analyze budget allocations and spending', permissions: ['budget:read', 'analytics:generate'] }
         );
         break;
-        
+
       case 'healthcare':
         baseCaps.push(
           { type: 'patient_data_management', description: 'Manage patient information securely', permissions: ['patient:read', 'hipaa:comply'] },
@@ -822,7 +839,7 @@ Focus on tools that would genuinely help users complete their business tasks mor
           { type: 'compliance_tracking', description: 'Track healthcare compliance requirements', permissions: ['compliance:monitor', 'audit:create'] }
         );
         break;
-        
+
       default:
         baseCaps.push(
           { type: 'data_processing', description: 'Process and validate business data', permissions: ['data:read', 'data:validate'] },
@@ -830,7 +847,7 @@ Focus on tools that would genuinely help users complete their business tasks mor
           { type: 'document_management', description: 'Manage business documents', permissions: ['document:read', 'document:process'] }
         );
     }
-    
+
     // Add process-specific capabilities
     if (businessRequirement.extractedEntities?.processes) {
       for (const process of businessRequirement.extractedEntities.processes) {
@@ -841,7 +858,7 @@ Focus on tools that would genuinely help users complete their business tasks mor
         });
       }
     }
-    
+
     return baseCaps;
   }
 
@@ -864,6 +881,7 @@ Original Business Requirement: ${businessRequirement.originalDescription}
 Generated Components: ${Object.keys(generatedCode.components).join(", ")}
 Generated APIs: ${Object.keys(generatedCode.apiEndpoints).join(", ")}
 Database Schema: ${Object.keys(generatedCode.databaseSchema).join(", ")}
+Generated Visual Assets: ${generatedCode.visualAssets ? Object.keys(generatedCode.visualAssets).join(", ") : "None"}
 
 Generate:
 1. User Guide - How to use the application
@@ -1009,6 +1027,11 @@ Generate:
             type: "array",
             items: { type: "string" },
             description: "List of external integrations needed"
+          },
+          visualAssets: {
+            type: "array",
+            items: { type: "string" },
+            description: "List of visual assets to generate (images, videos)"
           },
           estimatedComplexity: {
             type: "string",

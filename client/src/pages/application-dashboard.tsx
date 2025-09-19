@@ -3,13 +3,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  Plus, 
-  Eye, 
-  Edit, 
-  Trash2, 
-  Clock, 
-  CheckCircle, 
+import {
+  Plus,
+  Eye,
+  Edit,
+  Trash2,
+  Clock,
+  CheckCircle,
   AlertCircle,
   Zap,
   Bot,
@@ -18,6 +18,9 @@ import {
   Settings
 } from "lucide-react";
 import { useState } from "react";
+import { EmbeddedChatbot } from "@/components/chatbot";
+import { useWorkflowWebSocket } from "@/hooks/useWorkflowWebSocket";
+import VisualAssetViewer from "@/components/visual-assets/VisualAssetViewer";
 
 // Mock data for demonstration
 const mockApplications = [
@@ -34,7 +37,7 @@ const mockApplications = [
     integrations: 2
   },
   {
-    id: "app-2", 
+    id: "app-2",
     name: "Expense Reporting System",
     description: "Receipt scanning, approval workflows, and payment processing",
     status: "generating" as const,
@@ -47,7 +50,7 @@ const mockApplications = [
   },
   {
     id: "app-3",
-    name: "Leave Management System", 
+    name: "Leave Management System",
     description: "Time off requests, approvals, and balance tracking",
     status: "generating" as const,
     completionPercentage: 25,
@@ -192,25 +195,25 @@ export default function ApplicationDashboard() {
                       Created {app.createdAt}
                     </span>
                     <div className="flex gap-2">
-                      <Button 
+                      <Button
                         data-testid={`button-view-${app.id}`}
-                        variant="outline" 
+                        variant="outline"
                         size="sm"
                       >
                         <Eye className="h-4 w-4 mr-2" />
                         View
                       </Button>
-                      <Button 
+                      <Button
                         data-testid={`button-edit-${app.id}`}
-                        variant="outline" 
+                        variant="outline"
                         size="sm"
                       >
                         <Edit className="h-4 w-4 mr-2" />
                         Edit
                       </Button>
-                      <Button 
+                      <Button
                         data-testid={`button-settings-${app.id}`}
-                        variant="outline" 
+                        variant="outline"
                         size="sm"
                       >
                         <Settings className="h-4 w-4" />
@@ -252,7 +255,7 @@ export default function ApplicationDashboard() {
                       Analyzed {req.createdAt}
                     </span>
                     <div className="flex gap-2">
-                      <Button 
+                      <Button
                         data-testid={`button-generate-from-${req.id}`}
                         size="sm"
                         disabled={req.status !== "validated"}
@@ -260,9 +263,9 @@ export default function ApplicationDashboard() {
                         <Zap className="h-4 w-4 mr-2" />
                         Generate App
                       </Button>
-                      <Button 
+                      <Button
                         data-testid={`button-delete-${req.id}`}
-                        variant="outline" 
+                        variant="outline"
                         size="sm"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -349,6 +352,78 @@ export default function ApplicationDashboard() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        <TabsContent value="computer-use" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                🖥️ Computer Use Automation
+              </CardTitle>
+              <CardDescription>
+                AI-powered automation capabilities for interacting with desktop applications
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {/* selectedApp is not defined here, assuming it will be handled in a parent component or fetched */}
+              {/* For demonstration, let's assume a default structure or conditionally render if selectedApp exists */}
+              {selectedApp && selectedApp.computerUse ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {selectedApp.computerUse.capabilities?.map((capability: any, index: number) => (
+                      <Card key={index}>
+                        <CardHeader>
+                          <CardTitle className="text-sm">{capability.name}</CardTitle>
+                          <CardDescription className="text-xs">
+                            {capability.category} • {capability.businessContext}
+                          </CardDescription>
+                        </Header>
+                        <CardContent>
+                          <p className="text-sm text-gray-600 mb-3">{capability.description}</p>
+                          <Badge variant="outline" className="text-xs">
+                            {capability.actions?.length || 0} actions
+                          </Badge>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+
+                  {selectedApp.computerUse.setupInstructions && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-sm">Setup Instructions</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <pre className="text-xs bg-gray-50 p-3 rounded-md overflow-auto whitespace-pre-wrap">
+                          {selectedApp.computerUse.setupInstructions}
+                        </pre>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-gray-500">No computer use capabilities generated</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="visual-assets" className="space-y-4">
+          <VisualAssetViewer
+            businessRequirement={selectedApp?.businessRequirement} // Use optional chaining as selectedApp might be null initially
+            onAssetsGenerated={(assets) => {
+              setApplications(prev =>
+                prev.map(app =>
+                  app.id === selectedApp?.id
+                    ? { ...app, visualAssets: assets }
+                    : app
+                )
+              );
+              setSelectedApp(prev => ({ ...prev, visualAssets: assets }));
+            }}
+          />
         </TabsContent>
       </Tabs>
     </div>

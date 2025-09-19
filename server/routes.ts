@@ -29,6 +29,8 @@ import {
   SYSTEM_PERMISSIONS,
   type AuthorizedRequest 
 } from "./middleware/authorizationMiddleware";
+import { ComputerUseService } from "./services/computerUseService";
+import { ImageVideoGenerationService } from "./services/imageVideoGenerationService";
 
 // Session typing for proper TypeScript support
 interface SessionWithPassport {
@@ -98,29 +100,31 @@ export async function registerRoutes(
 ): Promise<Server> {
   // Use injected storage for testing or default storage for production
   const storage = injectedStorage || defaultStorage;
-  
+
   // Set up authentication first (unless disabled for testing)
   if (!options?.disableAuth) {
     await setupAuth(app);
   }
-  
-  // Initialize NLP Service, Clarification Service, and Application Generation Service
+
+  // Initialize NLP Service, Clarification Service, Application Generation Service, Workflow Generation Service, and Computer Use Service
   const nlpService = new NLPService();
   const clarificationService = new ClarificationService();
   const applicationGenerationService = new ApplicationGenerationService();
   const workflowGenerationService = new WorkflowGenerationService();
-  
+  const computerUseService = new ComputerUseService();
+  const imageVideoService = new ImageVideoGenerationService();
+
   // ===== WORKFLOW MANAGEMENT ENDPOINTS =====
-  
+
   // Get all available workflow patterns  
   app.get("/api/workflows", isAuthenticated, requireOrganization(), async (req: Request, res: Response) => {
     const authReq = req as AuthorizedRequest;
     try {
       // Get all generated applications for the organization to extract workflow patterns
       const generatedApps = await storage.getGeneratedApplicationsByOrganization(authReq.organizationId!);
-      
+
       const workflows: any[] = [];
-      
+
       // Extract workflow patterns from generated applications
       for (const app of generatedApps) {
         if (app.generatedWorkflows && Array.isArray(app.generatedWorkflows)) {
@@ -133,7 +137,7 @@ export async function registerRoutes(
           })));
         }
       }
-      
+
       // If no workflows found, return some sample patterns for demonstration
       if (workflows.length === 0) {
         workflows.push({
@@ -147,45 +151,45 @@ export async function registerRoutes(
           completedToday: 0
         });
       }
-      
+
       res.json(workflows);
     } catch (error) {
       console.error("Error fetching workflows:", error);
       res.status(500).json({ message: "Failed to fetch workflows" });
     }
   });
-  
+
   // Get active workflow executions - SECURITY CRITICAL: Organization scoped
   app.get("/api/workflows/executions/active", isAuthenticated, requireOrganization(), async (req: Request, res: Response) => {
     const authReq = req as AuthorizedRequest;
     try {
       const userId = authReq.user.claims.sub;
-      
+
       // SECURITY CRITICAL: Use organization-scoped execution listing to prevent cross-tenant data exposure
       const organizationExecutions = await getWorkflowExecutionEngine().listUserExecutionsByOrg(userId, authReq.organizationId);
-      
+
       // Filter for active executions (in_progress, pending) within the user's organization
       const activeExecutions = organizationExecutions.filter(execution => 
         ["in_progress", "pending"].includes(execution.status)
       );
-      
+
       res.json(activeExecutions);
     } catch (error) {
       console.error("Error fetching active executions:", error);
       res.status(500).json({ message: "Failed to fetch active executions" });
     }
   });
-  
+
   // Register workflow execution routes
   registerWorkflowRoutes(app);
 
   // ===== PROCESS AUTOMATION ENGINE ENDPOINTS =====
-  
+
   // Initialize Process Automation Engine and Monitoring Service (singletons)
   const { ProcessAutomationEngine } = await import("./engines/processAutomationEngine");
   const { ProcessMonitoringService } = await import("./services/processMonitoringService");
   const { BusinessProcessConnector } = await import("./services/businessProcessConnector");
-  
+
   const processAutomationEngine = new ProcessAutomationEngine({
     enableAIDecisions: true,
     enableAutoRecovery: true,
@@ -193,12 +197,12 @@ export async function registerRoutes(
     maxRetryAttempts: 3,
     escalationThreshold: 24
   });
-  
+
   const processMonitoringService = new ProcessMonitoringService();
   const businessProcessConnector = new BusinessProcessConnector();
 
   // Start automated business process
-  app.post("/api/process/start", isAuthenticated, requireOrganization, async (req: any, res: Response) => {
+  app.post("/api/process/start", isAuthenticated, requireOrganization(), async (req: any, res: Response) => {
     try {
       const { workflowId, businessRequirementId, initialData = {} } = req.body;
       const userId = req.user.claims.sub;
@@ -260,7 +264,7 @@ export async function registerRoutes(
   });
 
   // Get process analytics dashboard
-  app.get("/api/process/analytics", isAuthenticated, requireOrganization, async (req: any, res: Response) => {
+  app.get("/api/process/analytics", isAuthenticated, requireOrganization(), async (req: any, res: Response) => {
     try {
       const dashboard = processMonitoringService.getProcessDashboard(req.organizationId);
       res.status(200).json(dashboard);
@@ -274,10 +278,10 @@ export async function registerRoutes(
   });
 
   // Send business process notifications  
-  app.post("/api/process/notify", isAuthenticated, requireOrganization, async (req: any, res: Response) => {
+  app.post("/api/process/notify", isAuthenticated, requireOrganization(), async (req: any, res: Response) => {
     try {
       const { type, recipients, message, subject, priority = "medium" } = req.body;
-      
+
       const response = await businessProcessConnector.sendNotification(
         type,
         recipients,
@@ -301,12 +305,12 @@ export async function registerRoutes(
   });
 
   // Generate process performance report
-  app.get("/api/process/reports/:timeRange", isAuthenticated, requireOrganization, async (req: any, res: Response) => {
+  app.get("/api/process/reports/:timeRange", isAuthenticated, requireOrganization(), async (req: any, res: Response) => {
     try {
       const { timeRange = "day" } = req.params;
-      
+
       const report = processMonitoringService.generatePerformanceReport(timeRange as "day" | "week" | "month");
-      
+
       res.status(200).json({
         timeRange,
         generatedAt: new Date().toISOString(),
@@ -322,7 +326,7 @@ export async function registerRoutes(
   });
 
   // ===== TEMPLATE GENERATION SYSTEM ENDPOINTS (Story 5.2) =====
-  
+
   // Initialize Template Generation Service
   const { templateGenerationService } = await import("./services/templateGenerationService");
 
@@ -347,7 +351,7 @@ export async function registerRoutes(
   });
 
   // Generate template from existing application
-  app.post("/api/templates/generate", isAuthenticated, requireOrganization, async (req: any, res: Response) => {
+  app.post("/api/templates/generate", isAuthenticated, requireOrganization(), async (req: any, res: Response) => {
     try {
       // Validate request body
       const validation = generateTemplateSchema.safeParse(req.body);
@@ -362,7 +366,7 @@ export async function registerRoutes(
       }
 
       const { applicationId, options } = validation.data;
-      
+
       // Mock application data for template generation
       const mockApplication = {
         id: applicationId,
@@ -389,7 +393,7 @@ export async function registerRoutes(
       };
 
       const template = await templateGenerationService.generateTemplate(mockApplication, undefined, options);
-      
+
       res.status(201).json({
         templateId: template.id,
         name: template.name,
@@ -410,7 +414,7 @@ export async function registerRoutes(
   });
 
   // Get available templates with filtering
-  app.get("/api/templates", isAuthenticated, requireOrganization, async (req: any, res: Response) => {
+  app.get("/api/templates", isAuthenticated, requireOrganization(), async (req: any, res: Response) => {
     try {
       const filters = {
         category: req.query.category,
@@ -423,7 +427,7 @@ export async function registerRoutes(
         ...filters,
         organizationId: req.organizationId // Add organization scoping at service level
       });
-      
+
       res.status(200).json({
         templates: templates.map(t => ({
           id: t.id,
@@ -449,15 +453,15 @@ export async function registerRoutes(
   });
 
   // Deploy template to create new application
-  app.post("/api/templates/:templateId/deploy", isAuthenticated, requireOrganization, async (req: any, res: Response) => {
+  app.post("/api/templates/:templateId/deploy", isAuthenticated, requireOrganization(), async (req: any, res: Response) => {
     try {
       const { templateId } = req.params;
-      
+
       // Validate template ID
       if (!templateId || typeof templateId !== 'string' || templateId.length === 0) {
         return res.status(400).json({ message: "Valid template ID is required" });
       }
-      
+
       // Validate request body
       const validation = deployTemplateSchema.safeParse(req.body);
       if (!validation.success) {
@@ -486,7 +490,7 @@ export async function registerRoutes(
       };
 
       const result = await templateGenerationService.deployTemplate(deploymentRequest);
-      
+
       res.status(202).json({
         deploymentId: result.deploymentId,
         applicationId: result.applicationId,
@@ -506,17 +510,17 @@ export async function registerRoutes(
   });
 
   // Get template details by ID
-  app.get("/api/templates/:templateId", isAuthenticated, requireOrganization, async (req: any, res: Response) => {
+  app.get("/api/templates/:templateId", isAuthenticated, requireOrganization(), async (req: any, res: Response) => {
     try {
       const { templateId } = req.params;
-      
+
       // Validate template ID
       if (!templateId || typeof templateId !== 'string' || templateId.length === 0) {
         return res.status(400).json({ message: "Valid template ID is required" });
       }
-      
+
       const template = await templateGenerationService.getTemplateById(templateId, req.organizationId);
-      
+
       if (!template) {
         return res.status(404).json({ message: "Template not found" });
       }
@@ -531,7 +535,7 @@ export async function registerRoutes(
       });
     }
   });
-  
+
   // Helper function to convert database entities to service types
   function convertToExtractedBusinessData(businessRequirement: any): ExtractedBusinessData {
     return {
@@ -594,7 +598,7 @@ export async function registerRoutes(
       confidence: businessRequirement.confidence || 0.5
     };
   }
-  
+
   // Auth routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
@@ -606,12 +610,12 @@ export async function registerRoutes(
       res.status(500).json({ message: "Failed to fetch user" });
     }
   });
-  
+
   // Health Check Endpoint - Enhanced with service status
   app.get("/api/health", (req: Request, res: Response) => {
     const allServicesHealthy = Object.values(globalServiceHealth).every(status => status === 'available');
     const httpStatus = allServicesHealthy ? 200 : 503;
-    
+
     res.status(httpStatus).json({
       status: allServicesHealthy ? "healthy" : "degraded",
       timestamp: new Date().toISOString(),
@@ -628,7 +632,7 @@ export async function registerRoutes(
   });
 
   // ===== ADMIN API ENDPOINTS =====
-  
+
   // Demo admin endpoint with organization and permission requirements
   app.get("/api/admin/organizations/:organizationId", 
     isAuthenticated, 
@@ -650,7 +654,7 @@ export async function registerRoutes(
   );
 
   // ===== BUSINESS REQUIREMENTS ENDPOINTS =====
-  
+
   /**
    * Get business requirement by ID with multi-tenant isolation
    */
@@ -660,7 +664,7 @@ export async function registerRoutes(
       const organizationId = req.organizationId;
 
       const requirement = await storage.getBusinessRequirement(id);
-      
+
       // Enforce multi-tenant isolation
       if (!requirement || requirement.organizationId !== organizationId) {
         return res.status(404).json({
@@ -703,7 +707,7 @@ export async function registerRoutes(
     try {
       const organizationId = req.organizationId;
       const userId = req.user.claims.sub;
-      
+
       const requirementData = {
         ...req.body,
         organizationId,
@@ -723,20 +727,20 @@ export async function registerRoutes(
   });
 
   // ===== NLP ENDPOINTS =====
-  
+
   // Parse business description into structured requirements
   app.post("/api/nlp/parse-business-description", isAuthenticated, requireAIServiceMiddleware, async (req: any, res: Response) => {
     try {
       const validatedData = parseBusinessDescriptionSchema.parse(req.body);
       const { description, conversationId, context } = validatedData;
       const userId = req.user.claims.sub; // Derive userId from authenticated session
-      
+
       // Use real NLP Service with OpenAI GPT-4 integration
       const parseResult = await nlpService.parseBusinessDescription(description, {
         conversationHistory: context?.conversationHistory || [],
         preserveContext: !!conversationId
       });
-      
+
       const extractedEntities = {
         businessContext: parseResult.businessContext,
         processes: parseResult.processes,
@@ -754,7 +758,7 @@ export async function registerRoutes(
       };
       const workflowPatterns = parseResult.workflowPatterns;
       const confidence = parseResult.confidence;
-      
+
       // Store the business requirement
       const businessRequirement = await storage.createBusinessRequirement({
         userId,
@@ -765,7 +769,7 @@ export async function registerRoutes(
         confidence,
         status: "validated"
       });
-      
+
       res.status(200).json({
         businessRequirementId: businessRequirement.id,
         extractedEntities,
@@ -776,7 +780,7 @@ export async function registerRoutes(
         validationWarnings: parseResult.validationWarnings || [],
         usage: parseResult.usage
       });
-      
+
     } catch (error) {
       if (error instanceof z.ZodError) {
         res.status(400).json({ message: error.errors[0].message });
@@ -787,15 +791,15 @@ export async function registerRoutes(
   });
 
   // Streaming NLP analysis with real-time progress updates
-  app.post("/api/nlp/parse-business-description/stream", isAuthenticated, requireOrganization, requireAIServiceMiddleware, async (req: any, res: Response) => {
+  app.post("/api/nlp/parse-business-description/stream", isAuthenticated, requireOrganization(), requireAIServiceMiddleware, async (req: any, res: Response) => {
     try {
       const validatedData = parseBusinessDescriptionSchema.parse(req.body);
       const { description, conversationId, context } = validatedData;
       const userId = req.user.claims.sub;
-      
+
       // Create analysis session ID for WebSocket tracking
       const analysisSessionId = `nlp_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
-      
+
       // Store initial business requirement with pending status
       const businessRequirement = await storage.createBusinessRequirement({
         userId,
@@ -822,10 +826,10 @@ export async function registerRoutes(
 
       // SECURITY: Generate CSRF token for WebSocket connection
       const csrfToken = `csrf_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
-      
+
       // SECURITY CRITICAL: Create analysis session with organization and CSRF token tracking
       nlpAnalysisService.createAnalysisSession(analysisSessionId, userId, req.organizationId, businessRequirement.id, csrfToken);
-      
+
       // Start streaming analysis in background
       const onUpdate = (update: any) => {
         nlpAnalysisService.updateProgress(analysisSessionId, {
@@ -836,7 +840,7 @@ export async function registerRoutes(
           partialData: update.partialData
         });
       };
-      
+
       // Use streaming NLP Service with real-time updates
       nlpService.streamParseBusinessDescription(description, onUpdate)
         .then(async (parseResult) => {
@@ -855,7 +859,7 @@ export async function registerRoutes(
             approvals_legacy: parseResult.approvals?.map(a => a.name) || [],
             integrations_legacy: parseResult.integrations?.map(i => i.name) || []
           };
-          
+
           // Update stored business requirement with final results
           await storage.updateBusinessRequirement(businessRequirement.id, {
             extractedEntities,
@@ -863,7 +867,7 @@ export async function registerRoutes(
             confidence: parseResult.confidence,
             status: "validated"
           });
-          
+
           // Send final completion update
           nlpAnalysisService.updateProgress(analysisSessionId, {
             businessRequirementId: businessRequirement.id,
@@ -876,7 +880,7 @@ export async function registerRoutes(
               confidence: parseResult.confidence
             }
           });
-          
+
           // Clean up after a delay
           setTimeout(() => {
             nlpAnalysisService.cleanupSession(analysisSessionId);
@@ -892,7 +896,7 @@ export async function registerRoutes(
             error: error.message
           });
         });
-      
+
       res.status(200).json({
         analysisSessionId,
         businessRequirementId: businessRequirement.id,
@@ -908,16 +912,16 @@ export async function registerRoutes(
       });
     }
   });
-  
+
   // Validate business description completeness
   app.post("/api/nlp/validate-description", isAuthenticated, requireAIServiceMiddleware, async (req: any, res: Response) => {
     try {
       const validatedData = validateDescriptionSchema.parse(req.body);
       const { description } = validatedData;
-      
+
       // Use real NLP Service for validation
       const validationResult = await nlpService.validateDescription(description);
-      
+
       res.status(200).json({
         isValid: validationResult.isValid,
         confidence: validationResult.confidence,
@@ -930,7 +934,7 @@ export async function registerRoutes(
           hasOutcome: validationResult.score.technicalDetail > 0.3
         }
       });
-      
+
     } catch (error) {
       if (error instanceof z.ZodError) {
         res.status(400).json({ message: error.errors[0].message });
@@ -941,34 +945,34 @@ export async function registerRoutes(
   });
 
   // ===== CLARIFICATION ENDPOINTS =====
-  
+
   // Generate clarification questions for a business requirement
   app.post("/api/nlp/clarification/questions", isAuthenticated, requireAIServiceMiddleware, async (req: any, res: Response) => {
     try {
       const validatedData = clarificationQuestionSchema.parse(req.body);
       const { businessRequirementId } = validatedData;
-      
+
       // Get the business requirement
       const businessRequirement = await storage.getBusinessRequirement(businessRequirementId);
       if (!businessRequirement) {
         return res.status(404).json({ message: "Business requirement not found" });
       }
-      
+
       // Generate clarification questions
       const extractedData = convertToExtractedBusinessData(businessRequirement);
-      
+
       const questions = await clarificationService.generateClarificationQuestions(
         businessRequirementId,
         extractedData,
         businessRequirement.originalDescription
       );
-      
+
       // Create clarification session
       const session = await clarificationService.createClarificationSession(
         businessRequirementId,
         questions
       );
-      
+
       res.status(200).json({
         sessionId: session.sessionId,
         questions: session.questions,
@@ -976,7 +980,7 @@ export async function registerRoutes(
         estimatedCompletionTime: session.estimatedCompletionTime,
         currentQuestion: session.questions[0] || null
       });
-      
+
     } catch (error) {
       console.error("Error generating clarification questions:", error);
       if (error instanceof z.ZodError) {
@@ -986,33 +990,33 @@ export async function registerRoutes(
       }
     }
   });
-  
+
   // Process response to clarification question
   app.post("/api/nlp/clarification/response", isAuthenticated, requireAIServiceMiddleware, async (req: any, res: Response) => {
     try {
       const validatedData = clarificationResponseSchema.parse(req.body);
       const { sessionId, questionId, response } = validatedData;
-      
+
       const session = clarificationService.getSession(sessionId);
       if (!session) {
         return res.status(404).json({ message: "Clarification session not found" });
       }
-      
+
       // Get business requirement for context
       const businessRequirement = await storage.getBusinessRequirement(session.businessRequirementId);
       if (!businessRequirement) {
         return res.status(404).json({ message: "Business requirement not found" });
       }
-      
+
       // Validate response consistency
       const extractedData = convertToExtractedBusinessData(businessRequirement);
-      
+
       const validationResult = await clarificationService.validateResponse(
         questionId,
         response,
         extractedData
       );
-      
+
       // Process the response
       const result = await clarificationService.processResponse(sessionId, {
         questionId,
@@ -1021,7 +1025,7 @@ export async function registerRoutes(
         followUpNeeded: validationResult.followUpNeeded,
         followUpQuestion: validationResult.followUpQuestion
       });
-      
+
       res.status(200).json({
         sessionId: result.session.sessionId,
         isComplete: result.isComplete,
@@ -1034,7 +1038,7 @@ export async function registerRoutes(
           confidence: validationResult.confidence
         }
       });
-      
+
     } catch (error) {
       console.error("Error processing clarification response:", error);
       if (error instanceof z.ZodError) {
@@ -1044,7 +1048,7 @@ export async function registerRoutes(
       }
     }
   });
-  
+
   // Refine requirements based on clarification responses
   app.post("/api/nlp/requirements/:id/refine", isAuthenticated, requireAIServiceMiddleware, async (req: any, res: Response) => {
     try {
@@ -1054,20 +1058,20 @@ export async function registerRoutes(
         ...req.body 
       });
       const { sessionId } = validatedData;
-      
+
       // Get business requirement
       const businessRequirement = await storage.getBusinessRequirement(businessRequirementId);
       if (!businessRequirement) {
         return res.status(404).json({ message: "Business requirement not found" });
       }
-      
+
       // Refine requirements using clarification responses
       const extractedData = convertToExtractedBusinessData(businessRequirement);
       const refinedRequirements = await clarificationService.refineRequirements(
         sessionId,
         extractedData
       );
-      
+
       // Update business requirement with refined data
       const updatedRequirement = await storage.updateBusinessRequirement(businessRequirementId, {
         extractedEntities: {
@@ -1080,11 +1084,11 @@ export async function registerRoutes(
         confidence: refinedRequirements.confidence,
         status: "validated"
       });
-      
+
       if (!updatedRequirement) {
         return res.status(500).json({ message: "Failed to update business requirement" });
       }
-      
+
       res.status(200).json({
         businessRequirementId: updatedRequirement.id,
         refinedRequirements: {
@@ -1105,7 +1109,7 @@ export async function registerRoutes(
         suggestions: refinedRequirements.suggestions,
         status: "refined"
       });
-      
+
     } catch (error) {
       console.error("Error refining requirements:", error);
       if (error instanceof z.ZodError) {
@@ -1115,17 +1119,17 @@ export async function registerRoutes(
       }
     }
   });
-  
+
   // Get clarification session status
   app.get("/api/nlp/clarification/session/:sessionId", isAuthenticated, async (req: any, res: Response) => {
     try {
       const { sessionId } = req.params;
-      
+
       const session = clarificationService.getSession(sessionId);
       if (!session) {
         return res.status(404).json({ message: "Clarification session not found" });
       }
-      
+
       res.status(200).json({
         sessionId: session.sessionId,
         businessRequirementId: session.businessRequirementId,
@@ -1137,7 +1141,7 @@ export async function registerRoutes(
         currentQuestion: session.questions[session.currentQuestionIndex] || null,
         completedQuestions: session.completedQuestions
       });
-      
+
     } catch (error) {
       console.error("Error getting clarification session:", error);
       res.status(500).json({ message: "Internal server error getting session status" });
@@ -1145,18 +1149,18 @@ export async function registerRoutes(
   });
 
   // ===== APPLICATION GENERATION ENDPOINTS =====
-  
+
   // Start complete application generation from business requirements
   app.post("/api/generate/application", isAuthenticated, async (req: any, res: Response) => {
     try {
       const validatedData = generateApplicationSchema.parse(req.body);
       const { businessRequirementId } = validatedData;
-      
+
       const businessRequirement = await storage.getBusinessRequirement(businessRequirementId);
       if (!businessRequirement) {
         return res.status(404).json({ message: "Business requirement not found" });
       }
-      
+
       // Create generated application record
       const generatedApp = await storage.createGeneratedApplication({
         businessRequirementId,
@@ -1166,7 +1170,7 @@ export async function registerRoutes(
         status: "generating",
         completionPercentage: 0
       });
-      
+
       // Start background application generation process
       applicationGenerationService.generateApplication(
         businessRequirement,
@@ -1184,14 +1188,14 @@ export async function registerRoutes(
       }).catch(error => {
         console.error(`Application generation failed for ${generatedApp.id}:`, error);
       });
-      
+
       res.status(200).json({
         applicationId: generatedApp.id,
         status: "generating",
         estimatedCompletionTime: new Date(Date.now() + 5 * 60 * 1000).toISOString(), // 5 minutes
         currentStep: "Analyzing requirements"
       });
-      
+
     } catch (error) {
       if (error instanceof z.ZodError) {
         res.status(400).json({ message: error.errors[0].message });
@@ -1200,24 +1204,24 @@ export async function registerRoutes(
       }
     }
   });
-  
+
   // Generate specific workflow within an application
   app.post("/api/generate/workflow", isAuthenticated, async (req: any, res: Response) => {
     try {
       const validatedData = generateWorkflowSchema.parse(req.body);
       const { applicationId, workflowType, configuration } = validatedData;
-      
+
       const generatedApp = await storage.getGeneratedApplication(applicationId);
       if (!generatedApp) {
         return res.status(404).json({ message: "Generated application not found" });
       }
-      
+
       // Get business requirement to generate workflow
       const businessRequirement = await storage.getBusinessRequirement(generatedApp.businessRequirementId);
       if (!businessRequirement) {
         return res.status(404).json({ message: "Business requirement not found" });
       }
-      
+
       // Generate comprehensive workflow system
       const workflowSystem = await workflowGenerationService.generateWorkflowSystem(
         businessRequirement,
@@ -1230,14 +1234,14 @@ export async function registerRoutes(
           targetRoles: configuration?.targetRoles || ["manager", "employee", "admin"]
         }
       );
-      
+
       res.status(200).json({
         workflowSystem,
         totalWorkflows: workflowSystem.workflows.length,
         generatedComponents: Object.keys(workflowSystem.uiComponents).length,
         status: "completed"
       });
-      
+
     } catch (error) {
       console.error("Workflow generation failed:", error);
       if (error instanceof z.ZodError) {
@@ -1250,54 +1254,54 @@ export async function registerRoutes(
       }
     }
   });
-  
+
   // Get application generation status
   app.get("/api/generate/application/:id/status", isAuthenticated, async (req: any, res: Response) => {
     try {
       const { id } = req.params;
-      
+
       const generatedApp = await storage.getGeneratedApplication(id);
       if (!generatedApp) {
         return res.status(404).json({ message: "Generated application not found" });
       }
-      
+
       res.status(200).json({
         status: generatedApp.status,
         completionPercentage: generatedApp.completionPercentage,
         currentStep: getCurrentGenerationStep(generatedApp),
         estimatedTimeRemaining: calculateRemainingTime(generatedApp.completionPercentage)
       });
-      
+
     } catch (error) {
       res.status(500).json({ message: "Internal server error getting application status" });
     }
   });
 
   // ===== CHATBOT ENDPOINTS =====
-  
+
   // Create embedded chatbot for generated application
-  app.post("/api/chatbot/create", isAuthenticated, requireOrganization, requireAIServiceMiddleware, async (req: AuthorizedRequest, res: Response) => {
+  app.post("/api/chatbot/create", isAuthenticated, requireOrganization(), requireAIServiceMiddleware, async (req: AuthorizedRequest, res: Response) => {
     try {
       const { generatedApplicationId, capabilities, personality } = req.body;
-      
+
       // Verify the application exists and belongs to user's organization
       const application = await storage.getGeneratedApplication(generatedApplicationId);
       if (!application) {
         return res.status(404).json({ message: "Generated application not found" });
       }
-      
+
       // Security: Verify organization access to the application
       const hasOrgAccess = await storage.hasOrgMembership(req.user.claims.sub, application.organizationId);
       if (!hasOrgAccess || application.organizationId !== req.organizationId) {
         return res.status(403).json({ message: "Access denied to this application" });
       }
-      
+
       // Get the business requirement for context
       const businessRequirement = await storage.getBusinessRequirement(application.businessRequirementId);
       if (!businessRequirement) {
         return res.status(400).json({ message: "Business requirement not found for application" });
       }
-      
+
       // Use EmbeddedChatbotService to create intelligent chatbot
       const chatbot = await embeddedChatbotService.createEmbeddedChatbot(
         generatedApplicationId,
@@ -1305,7 +1309,7 @@ export async function registerRoutes(
         capabilities || [],
         personality || { tone: 'professional', style: 'business', proactiveness: 'medium', expertiseLevel: 'intermediate' }
       );
-      
+
       res.status(201).json({
         chatbotId: chatbot.id,
         name: chatbot.name,
@@ -1314,7 +1318,7 @@ export async function registerRoutes(
         aiModel: chatbot.aiModel,
         generatedApplicationId: chatbot.generatedApplicationId
       });
-      
+
     } catch (error) {
       console.error('Chatbot creation error:', error);
       if (error instanceof z.ZodError) {
@@ -1324,23 +1328,23 @@ export async function registerRoutes(
       }
     }
   });
-  
+
   // Handle chatbot interactions
   app.post("/api/chatbot/interact", isAuthenticated, requireAIServiceMiddleware, async (req: any, res: Response) => {
     try {
       const validatedData = chatbotInteractionSchema.parse(req.body);
       const { chatbotId, message, sessionId } = validatedData;
       const userId = req.user.claims.sub;
-      
+
       const chatbot = await storage.getEmbeddedChatbot(chatbotId);
       if (!chatbot) {
         return res.status(404).json({ message: "Chatbot not found" });
       }
-      
+
       if (!chatbot.isActive) {
         return res.status(400).json({ message: "Chatbot is not active" });
       }
-      
+
       // Build context for the chatbot
       const context = {
         generatedApplicationId: chatbot.generatedApplicationId,
@@ -1350,7 +1354,7 @@ export async function registerRoutes(
         formState: req.body.formState || {},
         sessionData: req.body.sessionData || {}
       };
-      
+
       // Use the EmbeddedChatbotService for intelligent responses
       const response = await embeddedChatbotService.processMessage(
         chatbotId,
@@ -1358,7 +1362,7 @@ export async function registerRoutes(
         context,
         userId
       );
-      
+
       res.status(200).json({
         response: response.message,
         suggestedActions: response.suggestedActions || [],
@@ -1367,7 +1371,7 @@ export async function registerRoutes(
         chatbotId,
         aiModel: chatbot.aiModel
       });
-      
+
     } catch (error) {
       console.error('Chatbot interaction error:', error);
       if (error instanceof z.ZodError) {
@@ -1377,17 +1381,17 @@ export async function registerRoutes(
       }
     }
   });
-  
+
   // Get chatbot details
   app.get("/api/chatbot/:id", isAuthenticated, async (req: any, res: Response) => {
     try {
       const { id } = req.params;
-      
+
       const chatbot = await storage.getEmbeddedChatbot(id);
       if (!chatbot) {
         return res.status(404).json({ message: "Chatbot not found" });
       }
-      
+
       res.status(200).json({
         id: chatbot.id,
         name: chatbot.name,
@@ -1396,35 +1400,35 @@ export async function registerRoutes(
         aiModel: chatbot.aiModel,
         generatedApplicationId: chatbot.generatedApplicationId
       });
-      
+
     } catch (error) {
       res.status(500).json({ message: "Internal server error getting chatbot details" });
     }
   });
 
   // ===== ERROR HANDLING =====
-  
+
   // Application Generation Status endpoint with ownership check
   app.get("/api/applications/generation-status/:id", isAuthenticated, async (req: any, res: Response) => {
     try {
       const { id } = req.params;
-      const userId = req.user?.id;
-      
+      const userId = req.user.id;
+
       if (!userId) {
         return res.status(401).json({ message: "User authentication required" });
       }
-      
+
       const generatedApp = await storage.getGeneratedApplication(id);
       if (!generatedApp) {
         return res.status(404).json({ message: "Application not found" });
       }
-      
+
       // Get business requirement to check ownership
       const businessRequirement = await storage.getBusinessRequirement(generatedApp.businessRequirementId);
       if (!businessRequirement || businessRequirement.userId !== userId) {
         return res.status(403).json({ message: "Access denied - not your application" });
       }
-      
+
       res.status(200).json({
         applicationId: generatedApp.id,
         status: generatedApp.status,
@@ -1435,7 +1439,7 @@ export async function registerRoutes(
         createdAt: generatedApp.createdAt,
         updatedAt: generatedApp.updatedAt
       });
-      
+
     } catch (error) {
       console.error("Failed to get generation status:", error);
       res.status(500).json({ message: "Internal server error" });
@@ -1454,13 +1458,13 @@ export async function registerRoutes(
 
   // SECURITY CRITICAL: Enhanced WebSocket CSRF Token Management with endpoint binding
   const wsTokenStore = new Map<string, { token: string, endpoint: string, createdAt: Date, sessionId: string, used: boolean }>();
-  
+
   // Generate anti-CSRF token for specific WebSocket endpoint
   const generateWSCSRFToken = (sessionId: string, endpoint: string = 'default'): string => {
     const token = require('crypto').randomBytes(32).toString('hex');
     const nonce = require('crypto').randomBytes(8).toString('hex');
     const tokenKey = `${sessionId}:${endpoint}:${nonce}`;
-    
+
     wsTokenStore.set(tokenKey, {
       token,
       endpoint,
@@ -1468,21 +1472,21 @@ export async function registerRoutes(
       sessionId,
       used: false
     });
-    
+
     // Clean up expired tokens (older than 2 minutes)
     setTimeout(() => {
       wsTokenStore.delete(tokenKey);
     }, 2 * 60 * 1000);
-    
+
     return token;
   };
-  
+
   // SECURITY CRITICAL: True endpoint-bound WebSocket CSRF token validation
   const validateWSCSRFToken = (sessionId: string, providedToken: string, endpoint: string): boolean => {
     // Find matching token for this session, endpoint, and token value
     let matchingKey: string | null = null;
     let matchingEntry: any = null;
-    
+
     for (const [key, entry] of Array.from(wsTokenStore.entries())) {
       if (entry.sessionId === sessionId && 
           entry.endpoint === endpoint && 
@@ -1493,21 +1497,21 @@ export async function registerRoutes(
         break;
       }
     }
-    
+
     if (!matchingKey || !matchingEntry) {
       return false;
     }
-    
+
     // Check token age (2 minute TTL for bank-grade security)
     const age = Date.now() - matchingEntry.createdAt.getTime();
     if (age > 2 * 60 * 1000) {
       wsTokenStore.delete(matchingKey);
       return false;
     }
-    
+
     // BANK-GRADE: Single-use token - mark as used and delete
     wsTokenStore.delete(matchingKey);
-    
+
     return true;
   };
 
@@ -1535,12 +1539,12 @@ export async function registerRoutes(
   // SECURITY CRITICAL: Enhanced WebSocket CSRF Protection Utility
   const validateWebSocketCSRF = (request: any, sessionId: string, endpoint: string): boolean => {
     const origin = request.headers.origin;
-    
+
     // Bank-grade token transport: Use Sec-WebSocket-Protocol header instead of query params
     const protocols = request.headers['sec-websocket-protocol']?.split(',').map((p: string) => p.trim()) || [];
     const csrfProtocol = protocols.find((p: string) => p.startsWith('csrf-'));
     const csrfToken = csrfProtocol?.replace('csrf-', '');
-    
+
     // Build allowed origins from REPLIT_DOMAINS and localhost
     const allowedOrigins = [
       'https://localhost:5000',
@@ -1548,7 +1552,7 @@ export async function registerRoutes(
       'http://127.0.0.1:5000',
       'https://127.0.0.1:5000'
     ];
-    
+
     // Add production domains from REPLIT_DOMAINS (more robust than single REPLIT_DOMAIN)
     if (process.env.REPLIT_DOMAINS) {
       const domains = process.env.REPLIT_DOMAINS.split(',');
@@ -1556,35 +1560,35 @@ export async function registerRoutes(
         allowedOrigins.push(`https://${domain.trim()}`);
       });
     }
-    
+
     // CRITICAL: Reject connections without Origin or with disallowed Origin
     if (!origin || !allowedOrigins.includes(origin)) {
       console.warn(`WebSocket CSRF: Rejected connection from origin: ${origin}`);
       return false;
     }
-    
+
     // CRITICAL: Validate anti-CSRF token from Sec-WebSocket-Protocol header
     if (!csrfToken || !validateWSCSRFToken(sessionId, csrfToken, endpoint)) {
       console.warn(`WebSocket CSRF: Invalid or missing CSRF token for session: ${sessionId}, endpoint: ${endpoint}`);
       return false;
     }
-    
+
     return true;
   };
 
   // WebSocket upgrade handling for application generation progress with authentication
   httpServer.on("upgrade", async (request, socket, head) => {
     const { pathname } = url.parse(request.url || "");
-    
+
     // CRITICAL: Only handle our specific WebSocket paths, let Vite HMR handle its own
     if (!pathname?.startsWith("/ws/")) {
       return; // Let other handlers (like Vite HMR) handle this WebSocket
     }
-    
+
     // Parse cookies for session authentication first (needed for CSRF validation)
     const cookieHeader = request.headers.cookie;
     const rawSessionCookie = cookieHeader?.split(';').find(c => c.trim().startsWith('connect.sid='))?.split('=')[1];
-    
+
     // SECURITY CRITICAL: Unsign the session cookie to get the actual session ID
     let sessionId: string | null = null;
     if (rawSessionCookie) {
@@ -1600,47 +1604,47 @@ export async function registerRoutes(
         console.error('Failed to unsign session cookie:', error);
       }
     }
-    
+
     // SECURITY CRITICAL: Load and verify session using same store as HTTP
     if (!sessionId) {
       socket.write('HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\n\r\nSession required');
       socket.destroy();
       return;
     }
-    
+
     // Verify session exists and is valid using the same session store
     const session = await new Promise((resolve) => {
       sessionStore.get(sessionId, (err: any, session: any) => {
         resolve(err ? null : session);
       });
     });
-    
+
     if (!session?.passport?.user) {
       socket.write('HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain\r\n\r\nInvalid session');
       socket.destroy();
       return;
     }
-    
+
     // SECURITY CRITICAL: Enhanced CSRF Protection with session verification
     if (!validateWebSocketCSRF(request, sessionId, pathname || '')) {
       socket.write('HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\n\r\nCSRF validation failed');
       socket.destroy();
       return;
     }
-    
+
     // Handle NLP analysis progress WebSocket connections
     if (pathname?.startsWith("/ws/nlp-analysis/")) {
       const analysisSessionId = pathname.split("/").pop();
-      
+
       if (!analysisSessionId) {
         socket.write('HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\n\r\nInvalid analysis session ID');
         socket.destroy();
         return;
       }
-      
+
       try {
         const userId = session.passport.user.id;
-        
+
         // SECURITY CRITICAL: Verify ownership of the specific analysis session BEFORE WebSocket upgrade
         const sessionMetadata = nlpAnalysisService.getSessionMetadata(analysisSessionId);
         if (!sessionMetadata) {
@@ -1648,7 +1652,7 @@ export async function registerRoutes(
           socket.destroy();
           return;
         }
-        
+
         // BANK-GRADE: Verify user and organization ownership of the analysis session
         if (!nlpAnalysisService.verifySessionOwnership(analysisSessionId, userId, sessionMetadata.organizationId)) {
           console.warn(`WebSocket: Unauthorized access attempt to analysis session ${analysisSessionId} by user ${userId}`);
@@ -1656,7 +1660,7 @@ export async function registerRoutes(
           socket.destroy();
           return;
         }
-        
+
         // BANK-GRADE: Verify user still has organization membership for the specific resource
         const hasOrgAccess = await storage.hasOrgMembership(userId, sessionMetadata.organizationId);
         if (!hasOrgAccess) {
@@ -1665,11 +1669,11 @@ export async function registerRoutes(
           socket.destroy();
           return;
         }
-        
+
         // Proceed with WebSocket upgrade for NLP analysis
         wss.handleUpgrade(request, socket, head, (ws) => {
         nlpAnalysisService.registerProgressClient(analysisSessionId, ws);
-        
+
         ws.on('message', (message) => {
           try {
             const data = JSON.parse(message.toString());
@@ -1680,43 +1684,43 @@ export async function registerRoutes(
             console.error('Invalid WebSocket message:', error);
           }
         });
-        
+
           ws.on('close', () => {
             console.log(`WebSocket client disconnected from NLP analysis ${analysisSessionId}`);
           });
-          
+
           ws.send(JSON.stringify({ 
             type: 'connected', 
             analysisSessionId,
             message: 'Connected to NLP analysis progress updates'
           }));
         });
-        
+
       } catch (error) {
         console.error('NLP WebSocket authentication error:', error);
         socket.write('HTTP/1.1 500 Internal Server Error\r\n\r\n');
         socket.destroy();
       }
-      
+
       return;
     }
-    
+
     // Handle generation progress WebSocket connections
     if (pathname?.startsWith("/ws/generation-progress/")) {
       const applicationId = pathname.split("/").pop();
-      
+
       if (!applicationId) {
         socket.destroy();
         return;
       }
-      
+
       // Authenticate WebSocket connection
       if (!sessionId) {
         socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
         socket.destroy();
         return;
       }
-      
+
       try {
         // SECURITY CRITICAL: Extract user session and organization for authorization
         const session = await new Promise((resolve) => {
@@ -1724,15 +1728,15 @@ export async function registerRoutes(
             resolve(err ? null : session);
           });
         });
-        
+
         if (!session?.passport?.user) {
           socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
           socket.destroy();
           return;
         }
-        
+
         const userId = session.passport.user.id;
-        
+
         // Verify application exists and belongs to user's organization
         const generatedApp = await storage.getGeneratedApplication(applicationId);
         if (!generatedApp) {
@@ -1740,7 +1744,7 @@ export async function registerRoutes(
           socket.destroy();
           return;
         }
-        
+
         // SECURITY CRITICAL: Verify user has organization access to this application
         const hasOrgAccess = await storage.hasOrgMembership(userId, generatedApp.organizationId);
         if (!hasOrgAccess) {
@@ -1748,11 +1752,11 @@ export async function registerRoutes(
           socket.destroy();
           return;
         }
-        
+
         // Proceed with WebSocket upgrade if authenticated and authorized
         wss.handleUpgrade(request, socket, head, (ws) => {
           applicationGenerationService.registerProgressClient(applicationId, ws);
-          
+
           ws.on('message', (message) => {
             try {
               const data = JSON.parse(message.toString());
@@ -1763,42 +1767,42 @@ export async function registerRoutes(
               console.error('Invalid WebSocket message:', error);
             }
           });
-          
+
           ws.on('close', () => {
             console.log(`WebSocket client disconnected from generation progress for ${applicationId}`);
           });
-          
+
           ws.send(JSON.stringify({ 
             type: 'connected', 
             applicationId,
             message: 'Connected to generation progress updates'
           }));
         });
-        
+
       } catch (error) {
         console.error('WebSocket authentication error:', error);
         socket.write('HTTP/1.1 500 Internal Server Error\r\n\r\n');
         socket.destroy();
       }
     }
-    
+
     // Handle workflow execution progress WebSocket connections
     else if (pathname?.startsWith("/ws/workflow-progress/")) {
       const executionId = pathname.split("/").pop();
-      
+
       if (!executionId) {
         socket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
         socket.destroy();
         return;
       }
-      
+
       // Authenticate WebSocket connection
       if (!sessionId) {
         socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
         socket.destroy();
         return;
       }
-      
+
       try {
         // SECURITY CRITICAL: Extract user session and organization for authorization  
         const session = await new Promise((resolve) => {
@@ -1806,15 +1810,15 @@ export async function registerRoutes(
             resolve(err ? null : session);
           });
         });
-        
+
         if (!session?.passport?.user) {
           socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
           socket.destroy();
           return;
         }
-        
+
         const userId = session.passport.user.id;
-        
+
         // Verify workflow execution exists 
         const workflowExecution = await storage.getWorkflowExecution(executionId);
         if (!workflowExecution) {
@@ -1822,7 +1826,7 @@ export async function registerRoutes(
           socket.destroy();
           return;
         }
-        
+
         // Get the application to verify organization ownership
         const generatedApp = await storage.getGeneratedApplication(workflowExecution.generatedApplicationId);
         if (!generatedApp) {
@@ -1830,7 +1834,7 @@ export async function registerRoutes(
           socket.destroy();
           return;
         }
-        
+
         // SECURITY CRITICAL: Verify user has organization access to this workflow execution
         const hasOrgAccess = await storage.hasOrgMembership(userId, generatedApp.organizationId);
         if (!hasOrgAccess) {
@@ -1838,15 +1842,15 @@ export async function registerRoutes(
           socket.destroy();
           return;
         }
-        
+
         // Get workflow execution engine instance
         const { getWorkflowExecutionEngine } = require("./engines/workflowExecutionEngineInstance");
         const workflowExecutionEngine = getWorkflowExecutionEngine();
-        
+
         // Proceed with WebSocket upgrade for workflow execution
         wss.handleUpgrade(request, socket, head, (ws) => {
           getWorkflowExecutionEngine().registerProgressClient(executionId, ws);
-          
+
           ws.on('message', (message) => {
             try {
               const parsed = JSON.parse(message.toString());
@@ -1857,18 +1861,18 @@ export async function registerRoutes(
               console.error('Invalid WebSocket message:', error);
             }
           });
-          
+
           ws.on('close', () => {
             console.log(`WebSocket client disconnected from workflow execution ${executionId}`);
           });
-          
+
           ws.send(JSON.stringify({ 
             type: 'connected',
             executionId,
             message: 'Connected to workflow execution progress updates'
           }));
         });
-        
+
       } catch (error) {
         console.error('WebSocket workflow execution error:', error);
         socket.write('HTTP/1.1 500 Internal Server Error\r\n\r\n');
@@ -1879,13 +1883,13 @@ export async function registerRoutes(
     // Handle embedded chatbot WebSocket connections
     else if (pathname?.startsWith("/ws/chatbot/")) {
       const chatbotId = pathname.split("/").pop();
-      
+
       if (!chatbotId || !sessionId) {
         socket.write('HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\n\r\nInvalid chatbot ID or session');
         socket.destroy();
         return;
       }
-      
+
       try {
         // SECURITY CRITICAL: Verify session and authorization
         const session = await new Promise((resolve) => {
@@ -1893,15 +1897,15 @@ export async function registerRoutes(
             resolve(err ? null : session);
           });
         });
-        
+
         if (!session?.passport?.user) {
           socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
           socket.destroy();
           return;
         }
-        
+
         const userId = session.passport.user.id;
-        
+
         // Verify chatbot exists and user has access
         const chatbot = await storage.getEmbeddedChatbot(chatbotId);
         if (!chatbot) {
@@ -1909,7 +1913,7 @@ export async function registerRoutes(
           socket.destroy();
           return;
         }
-        
+
         // Verify application access through organization membership
         const application = await storage.getGeneratedApplication(chatbot.generatedApplicationId);
         if (!application) {
@@ -1917,7 +1921,7 @@ export async function registerRoutes(
           socket.destroy();
           return;
         }
-        
+
         // SECURITY CRITICAL: Verify organization access
         const hasOrgAccess = await storage.hasOrgMembership(userId, application.organizationId);
         if (!hasOrgAccess) {
@@ -1925,24 +1929,24 @@ export async function registerRoutes(
           socket.destroy();
           return;
         }
-        
+
         // Proceed with WebSocket upgrade for authenticated chatbot connections
         wss.handleUpgrade(request, socket, head, (ws) => {
           console.log(`WebSocket client connected to chatbot ${chatbotId} for user ${userId}`);
-          
+
           // Register client with EmbeddedChatbotService for real-time updates
           embeddedChatbotService.registerChatbotClient(chatbotId, ws);
-          
+
           // Handle incoming messages for real-time chat
           ws.on('message', async (message) => {
             try {
               const data = JSON.parse(message.toString());
-              
+
               if (data.type === 'ping') {
                 ws.send(JSON.stringify({ type: 'pong' }));
                 return;
               }
-              
+
               if (data.type === 'chat_message' && data.message) {
                 // Build context from WebSocket message
                 const context = {
@@ -1953,7 +1957,7 @@ export async function registerRoutes(
                   formState: data.context?.formState || {},
                   sessionData: data.context?.sessionData || {}
                 };
-                
+
                 // Process message through EmbeddedChatbotService
                 const response = await embeddedChatbotService.processMessage(
                   chatbotId,
@@ -1961,7 +1965,7 @@ export async function registerRoutes(
                   context,
                   userId
                 );
-                
+
                 // Send response back via WebSocket
                 ws.send(JSON.stringify({
                   type: 'chat_response',
@@ -1981,17 +1985,17 @@ export async function registerRoutes(
               }));
             }
           });
-          
+
           ws.on('close', () => {
             console.log(`WebSocket client disconnected from chatbot ${chatbotId}`);
             // EmbeddedChatbotService handles cleanup automatically when WebSocket closes
           });
-          
+
           ws.on('error', (error) => {
             console.error(`WebSocket error for chatbot ${chatbotId}:`, error);
             // EmbeddedChatbotService handles cleanup automatically on error
           });
-          
+
           // Send connection confirmation
           ws.send(JSON.stringify({
             type: 'connected',
@@ -2001,7 +2005,7 @@ export async function registerRoutes(
             timestamp: new Date().toISOString()
           }));
         });
-        
+
       } catch (error) {
         console.error('WebSocket chatbot connection error:', error);
         socket.write('HTTP/1.1 500 Internal Server Error\r\n\r\n');
@@ -2011,6 +2015,121 @@ export async function registerRoutes(
     }
     else {
       socket.destroy();
+    }
+  });
+
+  // ===== Computer Use Automation Endpoint =====
+  // Computer use automation endpoint
+  // router.post("/api/computer-use/generate", async (req, res) => {
+  //   try {
+  //     const { businessRequirement, workflows, forms } = req.body;
+
+  //     if (!businessRequirement) {
+  //       return res.status(400).json({ error: "Business requirement is required" });
+  //     }
+
+  //     const result = await computerUseService.generateComputerUseCapabilities(
+  //       businessRequirement, 
+  //       workflows || [], 
+  //       forms || []
+  //     );
+
+  //     res.json(result);
+  //   } catch (error) {
+  //     console.error("Computer use generation error:", error);
+  //     res.status(500).json({ 
+  //       error: "Failed to generate computer use capabilities",
+  //       details: error instanceof Error ? error.message : "Unknown error"
+  //     });
+  //   }
+  // });
+
+  // ===== Image and Video Generation Endpoints =====
+  // Image and video generation endpoints
+  app.post("/api/visual-assets/generate", async (req, res) => {
+    try {
+      const { businessRequirement, applicationMetadata } = req.body;
+
+      if (!businessRequirement) {
+        return res.status(400).json({ error: "Business requirement is required" });
+      }
+
+      const result = await imageVideoService.generateVisualAssetPackage(
+        businessRequirement,
+        applicationMetadata || {}
+      );
+
+      res.json(result);
+    } catch (error) {
+      console.error("Visual asset generation error:", error);
+      res.status(500).json({ 
+        error: "Failed to generate visual assets",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.post("/api/visual-assets/image", async (req, res) => {
+    try {
+      const imageRequest = req.body;
+
+      if (!imageRequest.prompt) {
+        return res.status(400).json({ error: "Image prompt is required" });
+      }
+
+      const result = await imageVideoService.generateSingleImage(imageRequest);
+
+      res.json(result);
+    } catch (error) {
+      console.error("Image generation error:", error);
+      res.status(500).json({ 
+        error: "Failed to generate image",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.post("/api/visual-assets/video", async (req, res) => {
+    try {
+      const videoRequest = req.body;
+
+      if (!videoRequest.script) {
+        return res.status(400).json({ error: "Video script is required" });
+      }
+
+      const result = await imageVideoService.generateSingleVideo(videoRequest);
+
+      res.json(result);
+    } catch (error) {
+      console.error("Video generation error:", error);
+      res.status(500).json({ 
+        error: "Failed to generate video",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.post("/api/templates/:templateId/enhance-visuals", async (req, res) => {
+    try {
+      const { templateId } = req.params;
+      const { businessContext } = req.body;
+
+      if (!businessContext) {
+        return res.status(400).json({ error: "Business context is required" });
+      }
+
+      const result = await imageVideoService.enhanceTemplateWithVisuals(
+        templateId,
+        businessContext
+      );
+
+      res.json(result);
+    } catch (error) {
+      console.error("Template visual enhancement error:", error);
+      res.status(500).json({ 
+        error: "Failed to enhance template with visuals",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
     }
   });
 
@@ -2068,7 +2187,7 @@ function calculateConfidence(description: string): number {
   const keywordCount = ['process', 'workflow', 'approval', 'form', 'user', 'employee'].filter(keyword => 
     description.toLowerCase().includes(keyword)
   ).length;
-  
+
   return Math.min(0.95, (length / 200) * 0.3 + (keywordCount / 6) * 0.7);
 }
 
@@ -2090,7 +2209,7 @@ function calculateCompletenessScore(description: string): number {
     description.toLowerCase().includes('approval') || description.toLowerCase().includes('complete'),
     description.length >= 20
   ];
-  
+
   return requiredElements.filter(Boolean).length / requiredElements.length;
 }
 
@@ -2128,7 +2247,7 @@ function generateWorkflowSteps(workflowType: string, configuration: any): string
 
 function getCurrentGenerationStep(generatedApp: any): string {
   const progress = generatedApp.completionPercentage || 0;
-  
+
   if (progress === 0) return "initializing";
   if (progress < 20) return "analyzing requirements";
   if (progress < 40) return "generating components";
