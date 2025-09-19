@@ -8,6 +8,7 @@ import { DatabaseSchemaGenerator } from "../generators/databaseSchemaGenerator";
 import { WorkflowGenerationService } from "./workflowGenerationService";
 import { WorkflowUIGenerator } from "../generators/workflowUIGenerator";
 import { EmbeddedChatbotService } from "./embeddedChatbotService";
+import { ComputerUseService } from "./computerUseService";
 import { ApplicationDeployer } from "../deployment/applicationDeployer";
 import { storage } from "../storage";
 import { join } from "path";
@@ -37,6 +38,7 @@ export interface GeneratedCode {
   integrations: { [filename: string]: string };
   workflows: { [filename: string]: string };
   chatbots: { [filename: string]: string };
+  computerUse: { [filename: string]: string };
   documentation: { [filename: string]: string };
 }
 
@@ -63,6 +65,7 @@ export class ApplicationGenerationService {
   private workflowGenerator: WorkflowGenerationService;
   private workflowUIGenerator: WorkflowUIGenerator;
   private chatbotService: EmbeddedChatbotService;
+  private computerUseService: ComputerUseService;
   private deployer: ApplicationDeployer;
 
   constructor() {
@@ -81,6 +84,7 @@ export class ApplicationGenerationService {
     this.workflowGenerator = new WorkflowGenerationService();
     this.workflowUIGenerator = new WorkflowUIGenerator();
     this.chatbotService = new EmbeddedChatbotService();
+    this.computerUseService = new ComputerUseService();
     this.deployer = new ApplicationDeployer();
   }
 
@@ -245,7 +249,53 @@ export class ApplicationGenerationService {
         workflows["workflowDocumentation.md"] = workflowSystem.documentation;
       }
 
-      // Phase 6: Generate embedded chatbots with custom agent tools if requested
+      // Phase 6: Generate computer use capabilities if requested
+      let computerUse: { [filename: string]: string } = {};
+      if (finalOptions.includeIntegrations) {
+        this.updateProgress(applicationId, {
+          stage: "integrating",
+          progress: 78,
+          message: "Generating computer use automation...",
+          currentComponent: "Computer Use Capabilities",
+          estimatedTimeRemaining: 200
+        });
+
+        try {
+          const computerUseResult = await this.computerUseService.generateComputerUseCapabilities(
+            businessRequirement,
+            workflows,
+            Object.keys(components)
+          );
+
+          computerUse["computerUseCapabilities.ts"] = computerUseResult.integrationCode;
+          computerUse["computerUseDocumentation.md"] = computerUseResult.documentation;
+          computerUse["computerUseSetup.md"] = computerUseResult.setupInstructions;
+          computerUse["computerUseConfig.json"] = JSON.stringify({
+            capabilities: computerUseResult.capabilities,
+            generatedAt: new Date().toISOString(),
+            businessContext: businessRequirement.extractedEntities?.businessContext?.industry
+          }, null, 2);
+
+          this.updateProgress(applicationId, {
+            stage: "integrating",
+            progress: 80,
+            message: "Computer use automation generated successfully",
+            estimatedTimeRemaining: 190
+          });
+
+        } catch (error) {
+          console.error("Failed to generate computer use capabilities:", error);
+          this.updateProgress(applicationId, {
+            stage: "integrating",
+            progress: 80,
+            message: "Computer use generation failed, continuing without computer use",
+            errors: [error instanceof Error ? error.message : "Unknown computer use error"],
+            estimatedTimeRemaining: 190
+          });
+        }
+      }
+
+      // Phase 7: Generate embedded chatbots with custom agent tools if requested
       let chatbots: { [filename: string]: string } = {};
       if (finalOptions.includeChatbots) {
         this.updateProgress(applicationId, {
@@ -327,7 +377,7 @@ You can customize the chatbot's behavior by updating its personality profile and
         }
       }
       
-      // Phase 7: Generate integrations if requested
+      // Phase 8: Generate integrations if requested
       let integrations: { [filename: string]: string } = {};
       if (finalOptions.includeIntegrations) {
         integrations = await this.generateIntegrations(businessRequirement, generationPlan);
@@ -350,6 +400,7 @@ You can customize the chatbot's behavior by updating its personality profile and
           integrations,
           workflows,
           chatbots,
+          computerUse,
           documentation: {}
         });
       }
@@ -369,6 +420,7 @@ You can customize the chatbot's behavior by updating its personality profile and
         integrations,
         workflows,
         chatbots,
+        computerUse,
         documentation
       });
 
@@ -426,6 +478,7 @@ You can customize the chatbot's behavior by updating its personality profile and
           integrations,
           workflows,
           chatbots,
+          computerUse,
           documentation
         },
         metrics: {
@@ -456,6 +509,7 @@ You can customize the chatbot's behavior by updating its personality profile and
           integrations: {},
           workflows: {},
           chatbots: {},
+          computerUse: {},
           documentation: {}
         },
         errors: [error instanceof Error ? error.message : "Unknown error"],
