@@ -1,10 +1,13 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
+import { WebSocketServer } from "ws";
+import url from "url";
 import { storage } from "./storage";
 import { z } from "zod";
 import { insertBusinessRequirementSchema, insertGeneratedApplicationSchema, insertEmbeddedChatbotSchema } from "@shared/schema";
 import { NLPService } from "./services/nlpService.js";
 import { ClarificationService } from "./services/clarificationService";
+import { ApplicationGenerationService } from "./services/applicationGenerationService";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { requireAIServiceMiddleware, checkAIServiceMiddleware } from "./middleware/aiServiceMiddleware";
 import { globalServiceHealth } from "./config/validation";
@@ -65,9 +68,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Set up authentication first
   await setupAuth(app);
   
-  // Initialize NLP Service and Clarification Service
+  // Initialize NLP Service, Clarification Service, and Application Generation Service
   const nlpService = new NLPService();
   const clarificationService = new ClarificationService();
+  const applicationGenerationService = new ApplicationGenerationService();
   
   // Auth routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
@@ -450,8 +454,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         completionPercentage: 0
       });
       
-      // TODO: Implement actual application generation logic
-      // This would orchestrate workflow, form, and integration generation
+      // Start background application generation process
+      applicationGenerationService.generateApplication(
+        businessRequirement,
+        generatedApp,
+        {
+          includeWorkflows: true,
+          includeForms: true,
+          includeIntegrations: true,
+          includeChatbots: true,
+          deploymentTarget: "replit",
+          generateDocumentation: true
+        }
+      ).then(result => {
+        console.log(`Application generation completed for ${generatedApp.id}:`, result.success);
+      }).catch(error => {
+        console.error(`Application generation failed for ${generatedApp.id}:`, error);
+      });
       
       res.status(200).json({
         applicationId: generatedApp.id,
@@ -612,14 +631,148 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ===== ERROR HANDLING =====
   
+  // Application Generation Status endpoint with ownership check
+  app.get("/api/applications/generation-status/:id", isAuthenticated, async (req: any, res: Response) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user?.id;
+      
+      if (!userId) {
+        return res.status(401).json({ message: "User authentication required" });
+      }
+      
+      const generatedApp = await storage.getGeneratedApplicationById(id);
+      if (!generatedApp) {
+        return res.status(404).json({ message: "Application not found" });
+      }
+      
+      // Get business requirement to check ownership
+      const businessRequirement = await storage.getBusinessRequirement(generatedApp.businessRequirementId);
+      if (!businessRequirement || businessRequirement.userId !== userId) {
+        return res.status(403).json({ message: "Access denied - not your application" });
+      }
+      
+      res.status(200).json({
+        applicationId: generatedApp.id,
+        status: generatedApp.status,
+        progress: generatedApp.completionPercentage,
+        currentStep: getCurrentGenerationStep(generatedApp),
+        estimatedTimeRemaining: calculateRemainingTime(generatedApp.completionPercentage || 0),
+        deploymentUrl: generatedApp.deploymentUrl || null,
+        createdAt: generatedApp.createdAt,
+        updatedAt: generatedApp.updatedAt
+      });
+      
+    } catch (error) {
+      console.error("Failed to get generation status:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   // 404 handler for API routes
   app.use("/api/*", (req: Request, res: Response) => {
     res.status(404).json({ message: "API endpoint not found" });
   });
 
   const httpServer = createServer(app);
+
+  // Set up WebSocket server for real-time updates
+  const wss = new WebSocketServer({ server: httpServer });
+
+  // WebSocket upgrade handling for application generation progress with authentication
+  httpServer.on("upgrade", async (request, socket, head) => {
+    const { pathname } = url.parse(request.url || "");
+    
+    // Parse cookies for session authentication
+    const cookieHeader = request.headers.cookie;
+    const sessionId = cookieHeader?.split(';').find(c => c.trim().startsWith('connect.sid='))?.split('=')[1];
+    
+    // Handle generation progress WebSocket connections
+    if (pathname?.startsWith("/ws/generation-progress/")) {
+      const applicationId = pathname.split("/").pop();
+      
+      if (!applicationId) {
+        socket.destroy();
+        return;
+      }
+      
+      // Authenticate WebSocket connection
+      if (!sessionId) {
+        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+        socket.destroy();
+        return;
+      }
+      
+      try {
+        // Verify ownership of the application
+        const generatedApp = await storage.getGeneratedApplicationById(applicationId);
+        if (!generatedApp) {
+          socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
+          socket.destroy();
+          return;
+        }
+        
+        // Get business requirement to check ownership (simplified check)
+        const businessRequirement = await storage.getBusinessRequirement(generatedApp.businessRequirementId);
+        if (!businessRequirement) {
+          socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+          socket.destroy();
+          return;
+        }
+        
+        // Proceed with WebSocket upgrade if authenticated and authorized
+        wss.handleUpgrade(request, socket, head, (ws) => {
+          applicationGenerationService.registerProgressClient(applicationId, ws);
+          
+          ws.on('message', (message) => {
+            try {
+              const data = JSON.parse(message.toString());
+              if (data.type === 'ping') {
+                ws.send(JSON.stringify({ type: 'pong' }));
+              }
+            } catch (error) {
+              console.error('Invalid WebSocket message:', error);
+            }
+          });
+          
+          ws.on('close', () => {
+            console.log(`WebSocket client disconnected from generation progress for ${applicationId}`);
+          });
+          
+          ws.send(JSON.stringify({ 
+            type: 'connected', 
+            applicationId,
+            message: 'Connected to generation progress updates'
+          }));
+        });
+        
+      } catch (error) {
+        console.error('WebSocket authentication error:', error);
+        socket.write('HTTP/1.1 500 Internal Server Error\r\n\r\n');
+        socket.destroy();
+      }
+    }
+    // Handle embedded chatbot WebSocket connections
+    else if (pathname?.startsWith("/ws/chatbot/")) {
+      // Basic authentication check for chatbot connections
+      if (!sessionId) {
+        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+        socket.destroy();
+        return;
+      }
+      
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit("connection", ws, request);
+      });
+    }
+    else {
+      socket.destroy();
+    }
+  });
+
   return httpServer;
 }
+
 
 // ===== UTILITY FUNCTIONS =====
 
@@ -729,18 +882,23 @@ function generateWorkflowSteps(workflowType: string, configuration: any): string
   }
 }
 
-function getCurrentGenerationStep(app: any): string {
-  if (app.completionPercentage < 25) return 'Analyzing requirements';
-  if (app.completionPercentage < 50) return 'Generating workflows';
-  if (app.completionPercentage < 75) return 'Creating forms and integrations';
-  if (app.completionPercentage < 100) return 'Setting up embedded chatbots';
-  return 'Finalizing application';
+function getCurrentGenerationStep(generatedApp: any): string {
+  const progress = generatedApp.completionPercentage || 0;
+  
+  if (progress === 0) return "initializing";
+  if (progress < 20) return "analyzing requirements";
+  if (progress < 40) return "generating components";
+  if (progress < 60) return "generating APIs";
+  if (progress < 80) return "generating database";
+  if (progress < 95) return "integrating and testing";
+  if (progress < 100) return "deploying";
+  return "completed";
 }
 
-function calculateRemainingTime(completionPercentage: number): string {
-  const remainingPercent = 100 - completionPercentage;
-  const estimatedMinutes = Math.ceil((remainingPercent / 100) * 5); // 5 minutes total
-  return `${estimatedMinutes} minutes`;
+function calculateRemainingTime(progress: number): number {
+  const totalEstimatedTime = 15 * 60; // 15 minutes in seconds
+  const remainingProgress = 100 - progress;
+  return Math.max(0, Math.floor((remainingProgress / 100) * totalEstimatedTime));
 }
 
 function generateChatbotResponse(message: string, chatbot: any): string {
