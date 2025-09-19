@@ -178,7 +178,7 @@ export class ProcessMonitoringService {
   getProcessDashboard(organizationId: string): ProcessDashboard {
     return {
       analytics: this.getProcessAnalytics(organizationId),
-      recentAlerts: this.getRecentAlerts(),
+      recentAlerts: this.getRecentAlerts(organizationId),
       activeProcesses: Array.from(this.processHistory.values())
         .filter(p => p.status === "running" && p.organizationId === organizationId)
         .slice(0, 10), // Latest 10 active processes
@@ -346,10 +346,13 @@ export class ProcessMonitoringService {
   }
 
   /**
-   * Get recent alerts
+   * Get recent alerts for a specific organization
    */
-  private getRecentAlerts(limit: number = 20): ProcessAlert[] {
-    return this.alerts.slice(0, limit);
+  private getRecentAlerts(organizationId: string, limit: number = 20): ProcessAlert[] {
+    // CRITICAL: Filter alerts by organization to prevent cross-tenant data leakage
+    return this.alerts
+      .filter(alert => alert.metadata?.organizationId === organizationId)
+      .slice(0, limit);
   }
 
   /**

@@ -266,6 +266,11 @@ export class TemplateGenerationService {
       throw new Error(`Template not found: ${request.templateId}`);
     }
 
+    // CRITICAL: Enforce multi-tenant security - verify organization ownership
+    if (template.organizationId !== request.organizationId) {
+      throw new Error(`Access denied: Template belongs to different organization`);
+    }
+
     // Validate customizations against template schema
     await this.validateCustomizations(template, request.customizations);
 
@@ -338,9 +343,20 @@ export class TemplateGenerationService {
   /**
    * Get template by ID with full details
    */
-  async getTemplateById(templateId: string): Promise<TemplateDefinition | null> {
-    console.log(`[TEMPLATE_CATALOG] Retrieving template: ${templateId}`);
-    return this.templateCache.get(templateId) || null;
+  async getTemplateById(templateId: string, organizationId: string): Promise<TemplateDefinition | null> {
+    console.log(`[TEMPLATE_CATALOG] Retrieving template: ${templateId} for org: ${organizationId}`);
+    
+    const template = this.templateCache.get(templateId);
+    if (!template) {
+      return null;
+    }
+
+    // CRITICAL: Enforce multi-tenant security - verify organization ownership
+    if (template.organizationId !== organizationId) {
+      return null; // Template not found for this organization
+    }
+
+    return template;
   }
 
   /**
