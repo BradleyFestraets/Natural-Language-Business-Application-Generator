@@ -2,6 +2,19 @@ import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
 import { NLPService } from "../../server/services/nlpService";
 import { aiServiceHelpers, testConfig } from "../helpers/test-setup";
 
+// Mock OpenAI at the top level
+vi.mock("openai", () => ({
+  default: vi.fn(() => ({
+    chat: {
+      completions: {
+        create: vi.fn().mockResolvedValue({
+          choices: [{ message: { content: "test" } }]
+        })
+      }
+    }
+  }))
+}));
+
 /**
  * P0 PRIORITY: NLP Service Degradation Tests
  * Critical for platform stability when AI services are unavailable
@@ -15,19 +28,22 @@ describe("NLP Service Degradation & AI Availability", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     
+    // Get the mocked OpenAI constructor
+    const MockedOpenAI = vi.mocked(await import("openai")).default;
+    
     // Mock OpenAI with controllable failure modes
     mockOpenAI = {
       chat: {
         completions: {
-          create: vi.fn()
+          create: vi.fn().mockResolvedValue({
+            choices: [{ message: { content: "test" } }]
+          })
         }
       }
     };
 
-    // Mock the OpenAI import
-    vi.mock("openai", () => ({
-      default: vi.fn(() => mockOpenAI)
-    }));
+    // Update the constructor to return our mock
+    MockedOpenAI.mockImplementation(() => mockOpenAI);
 
     nlpService = new NLPService();
   });

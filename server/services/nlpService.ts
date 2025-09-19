@@ -127,11 +127,32 @@ export interface StreamingUpdate {
   error?: string;
 }
 
+export interface AIServiceHealthStatus {
+  aiServiceAvailable: boolean;
+  degradedMode: boolean;
+  lastChecked: Date;
+  responseTime?: number;
+  fallbackModeActive?: boolean;
+  degradationStartTime?: number;
+  lastSuccessfulAICall?: number;
+  capabilities: {
+    parsing: boolean;
+    validation: boolean;
+    streaming: boolean;
+    contextEnhancement: boolean;
+  };
+}
+
 export class NLPService {
   private openai: OpenAI;
   private cache: Map<string, ExtractedBusinessData> = new Map();
   private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes
   private cacheTimestamps: Map<string, number> = new Map();
+  private availabilityCache: Map<string, { available: boolean; timestamp: number }> = new Map();
+  private readonly AVAILABILITY_CACHE_TTL = 30 * 1000; // 30 seconds
+  private degradationStartTime: number | null = null;
+  private lastSuccessfulAICall: number | null = null;
+  private fallbackModeActive: boolean = false;
 
   constructor() {
     // Only initialize OpenAI if API key is available
@@ -146,14 +167,112 @@ export class NLPService {
   }
 
   /**
-   * Parse business description into structured requirements using GPT-4
+   * Check AI service availability with caching
+   */
+  async checkAIServiceAvailability(): Promise<boolean> {
+    const cacheKey = 'availability_check';
+    const cached = this.availabilityCache.get(cacheKey);
+    
+    // Return cached result if still valid
+    if (cached && Date.now() - cached.timestamp < this.AVAILABILITY_CACHE_TTL) {
+      return cached.available;
+    }
+
+    try {
+      // Quick check - do we have an API key?
+      if (!process.env.OPENAI_API_KEY || !this.openai) {
+        this.availabilityCache.set(cacheKey, { available: false, timestamp: Date.now() });
+        return false;
+      }
+
+      // Quick ping to OpenAI to check connectivity
+      const startTime = Date.now();
+      const response = await this.openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: [{ role: "user", content: "ping" }],
+        max_tokens: 1
+      }, {
+        timeout: 5000 // 5 second timeout
+      });
+
+      const responseTime = Date.now() - startTime;
+      const available = response.choices?.[0] ? true : false;
+      
+      // Track successful AI calls
+      if (available) {
+        this.lastSuccessfulAICall = Date.now();
+        if (this.fallbackModeActive) {
+          this.fallbackModeActive = false;
+          this.degradationStartTime = null;
+        }
+      }
+      
+      this.availabilityCache.set(cacheKey, { available, timestamp: Date.now() });
+      return available;
+
+    } catch (error) {
+      // Track degradation start
+      if (!this.fallbackModeActive) {
+        this.degradationStartTime = Date.now();
+        this.fallbackModeActive = true;
+      }
+      
+      this.availabilityCache.set(cacheKey, { available: false, timestamp: Date.now() });
+      return false;
+    }
+  }
+
+  /**
+   * Get comprehensive health status
+   */
+  async getHealthStatus(): Promise<AIServiceHealthStatus> {
+    const startTime = Date.now();
+    const aiAvailable = await this.checkAIServiceAvailability();
+    const responseTime = Date.now() - startTime;
+
+    return {
+      aiServiceAvailable: aiAvailable,
+      degradedMode: !aiAvailable,
+      lastChecked: new Date(),
+      responseTime,
+      fallbackModeActive: this.fallbackModeActive,
+      degradationStartTime: this.degradationStartTime,
+      lastSuccessfulAICall: this.lastSuccessfulAICall,
+      capabilities: {
+        parsing: aiAvailable,
+        validation: true, // Always available with fallback
+        streaming: aiAvailable,
+        contextEnhancement: aiAvailable
+      }
+    };
+  }
+
+  /**
+   * Get degradation duration in milliseconds
+   */
+  async getDegradationDuration(): Promise<number> {
+    if (!this.fallbackModeActive || !this.degradationStartTime) {
+      return 0;
+    }
+    return Date.now() - this.degradationStartTime;
+  }
+
+  /**
+   * Parse business description with fallback capability
    */
   async parseBusinessDescription(description: string, options?: {
     conversationHistory?: any[];
     preserveContext?: boolean;
+    allowFallback?: boolean;
   }): Promise<ExtractedBusinessData> {
     // Check if AI service is available
-    if (!isAIServiceAvailable() || !this.openai) {
+    const aiAvailable = await this.checkAIServiceAvailability();
+    
+    if (!aiAvailable) {
+      // Use fallback parsing if allowed
+      if (options?.allowFallback !== false) {
+        return this.parseWithFallback(description);
+      }
       throw new Error("AI service unavailable: OpenAI API key not configured or service unreachable");
     }
 
@@ -249,6 +368,131 @@ export class NLPService {
     }
 
     throw new Error("Max retries exceeded");
+  }
+
+  /**
+   * Fallback parsing using rule-based analysis when AI is unavailable
+   */
+  private parseWithFallback(description: string): ExtractedBusinessData {
+    // Basic keyword-based analysis for fallback mode
+    const lowerDesc = description.toLowerCase();
+    
+    // Detect industry based on keywords
+    let industry = "General";
+    if (lowerDesc.includes('hr') || lowerDesc.includes('human resources') || lowerDesc.includes('employee')) {
+      industry = "Human Resources";
+    } else if (lowerDesc.includes('finance') || lowerDesc.includes('accounting') || lowerDesc.includes('expense')) {
+      industry = "Finance";
+    } else if (lowerDesc.includes('operations') || lowerDesc.includes('inventory') || lowerDesc.includes('supply')) {
+      industry = "Operations";
+    }
+
+    // Extract basic processes based on keywords
+    const processes: BusinessProcess[] = [];
+    if (lowerDesc.includes('approval') || lowerDesc.includes('approve')) {
+      processes.push({
+        name: "Approval Process",
+        type: "core",
+        description: "Document or request approval workflow",
+        complexity: "medium"
+      });
+    }
+    if (lowerDesc.includes('form') || lowerDesc.includes('submit')) {
+      processes.push({
+        name: "Form Submission",
+        type: "core", 
+        description: "Data collection and form processing",
+        complexity: "low"
+      });
+    }
+
+    // Extract basic forms
+    const forms: BusinessForm[] = [];
+    if (lowerDesc.includes('form')) {
+      forms.push({
+        name: "Primary Form",
+        purpose: "Data collection based on description",
+        complexity: "simple"
+      });
+    }
+
+    // Extract basic approvals
+    const approvals: BusinessApproval[] = [];
+    if (lowerDesc.includes('manager') || lowerDesc.includes('supervisor')) {
+      approvals.push({
+        name: "Manager Approval",
+        role: "Manager",
+        criteria: "Standard approval criteria"
+      });
+    }
+
+    // Extract basic integrations
+    const integrations: BusinessIntegration[] = [];
+    if (lowerDesc.includes('email') || lowerDesc.includes('notification')) {
+      integrations.push({
+        name: "Email Notifications",
+        type: "email",
+        purpose: "Send notifications and updates",
+        criticality: "important"
+      });
+    }
+
+    // Basic workflow patterns
+    const workflowPatterns: WorkflowPattern[] = [];
+    if (lowerDesc.includes('approval')) {
+      workflowPatterns.push({
+        name: "Approval Workflow",
+        type: "sequential",
+        description: "Sequential approval process",
+        complexity: "simple"
+      });
+    }
+
+    // Basic risk assessment
+    const riskAssessment: RiskAssessment = {
+      securityRisks: ["Data access control needed"],
+      complianceRisks: ["Audit trail requirements"],
+      operationalRisks: ["User training requirements"]
+    };
+
+    // Basic resource requirements
+    const resourceRequirements: ResourceRequirements = {
+      userRoles: ["User", "Manager"],
+      technicalComplexity: "medium",
+      estimatedTimeframe: "2-4 weeks"
+    };
+
+    // Calculate confidence based on keywords found
+    const keywordCount = [
+      'process', 'workflow', 'form', 'approval', 'user', 'manager', 
+      'submit', 'review', 'data', 'system'
+    ].filter(keyword => lowerDesc.includes(keyword)).length;
+    
+    const confidence = Math.min(keywordCount / 10, 0.7); // Max 0.7 for fallback
+
+    return {
+      businessContext: {
+        industry,
+        criticality: "standard",
+        scope: "department"
+      },
+      processes,
+      forms,
+      approvals,
+      integrations,
+      workflowPatterns,
+      riskAssessment,
+      resourceRequirements,
+      confidence,
+      validationWarnings: [
+        "Parsed using fallback mode - AI service unavailable",
+        "Limited analysis performed - consider providing more details when AI is available"
+      ],
+      recommendations: [
+        "Review generated requirements when AI service is available for enhanced analysis",
+        "Provide more detailed specifications for better accuracy"
+      ]
+    };
   }
 
   /**

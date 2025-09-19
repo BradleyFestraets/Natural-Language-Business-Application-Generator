@@ -289,8 +289,42 @@ export const aiServiceHelpers = {
    * Mock AI service availability checks
    */
   mockAIServiceAvailable: (available: boolean = true) => {
-    process.env.OPENAI_API_KEY = available ? "test-key" : "";
+    if (available) {
+      process.env.OPENAI_API_KEY = "test-key";
+      // Mock successful OpenAI response
+      vi.doMock("openai", () => ({
+        default: vi.fn(() => ({
+          chat: {
+            completions: {
+              create: vi.fn().mockResolvedValue({
+                choices: [{ message: { content: "test" } }]
+              })
+            }
+          }
+        }))
+      }));
+    } else {
+      delete process.env.OPENAI_API_KEY;
+      // Mock OpenAI failure or no key
+      vi.doMock("openai", () => ({
+        default: vi.fn(() => ({
+          chat: {
+            completions: {
+              create: vi.fn().mockRejectedValue(new Error("API key not configured"))
+            }
+          }
+        }))
+      }));
+    }
     return vi.fn().mockResolvedValue(available);
+  },
+
+  /**
+   * Reset AI service mocks
+   */
+  resetAIServiceMocks: () => {
+    vi.doUnmock("openai");
+    delete process.env.OPENAI_API_KEY;
   },
   
   /**
