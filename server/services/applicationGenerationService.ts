@@ -256,9 +256,7 @@ export class ApplicationGenerationService {
       if (deploymentResult.success && deploymentResult.deploymentUrl) {
         await storage.updateGeneratedApplication(applicationId, {
           status: "completed",
-          completionPercentage: 100,
-          deploymentUrl: deploymentResult.deploymentUrl,
-          updatedAt: new Date()
+          completionPercentage: 100
         });
       }
 
@@ -470,12 +468,13 @@ Generate clean, production-ready code with proper imports and exports.`;
 
     if (businessRequirement.extractedEntities?.integrations) {
       for (const integration of businessRequirement.extractedEntities.integrations) {
+        const integrationName = typeof integration === 'string' ? integration : integration.name;
         const integrationCode = await this.generateIntegration(
-          integration,
+          integrationName,
           businessRequirement,
           generationPlan
         );
-        integrations[`${this.capitalizeAndClean(integration)}Integration.ts`] = integrationCode;
+        integrations[`${this.capitalizeAndClean(integrationName)}Integration.ts`] = integrationCode;
       }
     }
 
