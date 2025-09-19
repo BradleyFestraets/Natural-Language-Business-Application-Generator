@@ -224,7 +224,7 @@ export class EmbeddedChatbotService {
   /**
    * Unregister WebSocket client
    */
-  private unregisterChatbotClient(chatbotId: string, ws: WebSocket): void {
+  unregisterChatbotClient(chatbotId: string, ws: WebSocket): void {
     const clients = this.activeChatbots.get(chatbotId);
     if (clients) {
       const index = clients.indexOf(ws);

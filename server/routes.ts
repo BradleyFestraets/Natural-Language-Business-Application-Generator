@@ -1495,7 +1495,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`WebSocket client connected to chatbot ${chatbotId} for user ${userId}`);
           
           // Register client with EmbeddedChatbotService for real-time updates
-          embeddedChatbotService.registerClient(chatbotId, ws);
+          embeddedChatbotService.registerChatbotClient(chatbotId, ws);
           
           // Handle incoming messages for real-time chat
           ws.on('message', async (message) => {
@@ -1548,12 +1548,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           ws.on('close', () => {
             console.log(`WebSocket client disconnected from chatbot ${chatbotId}`);
-            embeddedChatbotService.unregisterClient(chatbotId, ws);
+            // EmbeddedChatbotService handles cleanup automatically when WebSocket closes
           });
           
           ws.on('error', (error) => {
             console.error(`WebSocket error for chatbot ${chatbotId}:`, error);
-            embeddedChatbotService.unregisterClient(chatbotId, ws);
+            // EmbeddedChatbotService handles cleanup automatically on error
           });
           
           // Send connection confirmation
