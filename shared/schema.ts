@@ -172,6 +172,26 @@ export const insertEmbeddedChatbotSchema = createInsertSchema(embeddedChatbots, 
 export type InsertEmbeddedChatbot = z.infer<typeof insertEmbeddedChatbotSchema>;
 export type EmbeddedChatbot = typeof embeddedChatbots.$inferSelect;
 
+// Chat Interactions Table
+export const chatInteractions = pgTable("chat_interactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  chatbotId: varchar("chatbot_id").notNull().references(() => embeddedChatbots.id),
+  userId: varchar("user_id").references(() => users.id),
+  userMessage: text("user_message").notNull(),
+  botResponse: text("bot_response").notNull(),
+  context: json("context").$type<Record<string, any>>(),
+  actionTaken: text("action_taken"),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+});
+
+export const insertChatInteractionSchema = createInsertSchema(chatInteractions).omit({ 
+  id: true, 
+  timestamp: true 
+});
+
+export type InsertChatInteraction = z.infer<typeof insertChatInteractionSchema>;
+export type ChatInteraction = typeof chatInteractions.$inferSelect;
+
 // Workflow Executions Table
 export const workflowExecutions = pgTable("workflow_executions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

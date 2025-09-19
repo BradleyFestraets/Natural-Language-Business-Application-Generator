@@ -7,6 +7,8 @@ import {
   type InsertGeneratedApplication,
   type EmbeddedChatbot,
   type InsertEmbeddedChatbot,
+  type ChatInteraction,
+  type InsertChatInteraction,
   type WorkflowExecution,
   type InsertWorkflowExecution,
   type Organization,
@@ -38,10 +40,18 @@ export interface IStorage {
 
   // Embedded Chatbot operations
   getEmbeddedChatbot(id: string): Promise<EmbeddedChatbot | undefined>;
+  getEmbeddedChatbotById(id: string): Promise<EmbeddedChatbot | undefined>;
+  getEmbeddedChatbotByApplication(applicationId: string): Promise<EmbeddedChatbot | undefined>;
   createEmbeddedChatbot(chatbot: InsertEmbeddedChatbot): Promise<EmbeddedChatbot>;
   updateEmbeddedChatbot(id: string, updates: Partial<InsertEmbeddedChatbot>): Promise<EmbeddedChatbot | undefined>;
   listEmbeddedChatbots(generatedApplicationId: string): Promise<EmbeddedChatbot[]>;
   deleteEmbeddedChatbot(id: string): Promise<boolean>;
+
+  // Chat Interaction operations
+  getChatInteraction(id: string): Promise<ChatInteraction | undefined>;
+  createChatInteraction(interaction: InsertChatInteraction): Promise<ChatInteraction>;
+  listChatInteractions(chatbotId: string): Promise<ChatInteraction[]>;
+  deleteChatInteraction(id: string): Promise<boolean>;
 
   // Workflow Execution operations
   getWorkflowExecution(id: string): Promise<WorkflowExecution | undefined>;
@@ -74,6 +84,7 @@ export class MemStorage implements IStorage {
   private businessRequirements: Map<string, BusinessRequirement>;
   private generatedApplications: Map<string, GeneratedApplication>;
   private embeddedChatbots: Map<string, EmbeddedChatbot>;
+  private chatInteractions: Map<string, ChatInteraction>;
   private workflowExecutions: Map<string, WorkflowExecution>;
   private organizations: Map<string, Organization>;
   private orgMemberships: Map<string, OrgMembership>;
@@ -83,6 +94,7 @@ export class MemStorage implements IStorage {
     this.businessRequirements = new Map();
     this.generatedApplications = new Map();
     this.embeddedChatbots = new Map();
+    this.chatInteractions = new Map();
     this.workflowExecutions = new Map();
     this.organizations = new Map();
     this.orgMemberships = new Map();
@@ -169,6 +181,7 @@ export class MemStorage implements IStorage {
     const requirement: BusinessRequirement = {
       ...insertRequirement,
       id,
+      extractedEntities: insertRequirement.extractedEntities || null,
       createdAt: now,
       updatedAt: now
     };
@@ -211,6 +224,19 @@ export class MemStorage implements IStorage {
     const application: GeneratedApplication = {
       ...insertApplication,
       id,
+      description: insertApplication.description || null,
+      generatedWorkflows: Array.isArray(insertApplication.generatedWorkflows) 
+        ? insertApplication.generatedWorkflows 
+        : (insertApplication.generatedWorkflows || null),
+      generatedForms: Array.isArray(insertApplication.generatedForms) 
+        ? insertApplication.generatedForms 
+        : (insertApplication.generatedForms || null),
+      generatedIntegrations: Array.isArray(insertApplication.generatedIntegrations) 
+        ? insertApplication.generatedIntegrations 
+        : (insertApplication.generatedIntegrations || null),
+      embeddedChatbots: Array.isArray(insertApplication.embeddedChatbots) 
+        ? insertApplication.embeddedChatbots 
+        : (insertApplication.embeddedChatbots || null),
       createdAt: now,
       updatedAt: now
     };
@@ -261,6 +287,9 @@ export class MemStorage implements IStorage {
     const chatbot: EmbeddedChatbot = {
       ...insertChatbot,
       id,
+      isActive: insertChatbot.isActive ?? true,
+      capabilities: insertChatbot.capabilities ? 
+        (Array.isArray(insertChatbot.capabilities) ? insertChatbot.capabilities : null) : null,
       createdAt: now,
       updatedAt: now
     };
@@ -275,6 +304,8 @@ export class MemStorage implements IStorage {
     const updated: EmbeddedChatbot = {
       ...existing,
       ...updates,
+      capabilities: updates.capabilities !== undefined ? 
+        (Array.isArray(updates.capabilities) ? updates.capabilities : null) : existing.capabilities,
       updatedAt: new Date()
     };
     this.embeddedChatbots.set(id, updated);
@@ -291,6 +322,48 @@ export class MemStorage implements IStorage {
     return this.embeddedChatbots.delete(id);
   }
 
+  // Additional EmbeddedChatbot methods for service compatibility
+  async getEmbeddedChatbotById(id: string): Promise<EmbeddedChatbot | undefined> {
+    return this.getEmbeddedChatbot(id); // Delegate to existing method
+  }
+
+  async getEmbeddedChatbotByApplication(applicationId: string): Promise<EmbeddedChatbot | undefined> {
+    // Find the first chatbot for this application
+    return Array.from(this.embeddedChatbots.values())
+      .find(chatbot => chatbot.generatedApplicationId === applicationId);
+  }
+
+  // ===== CHAT INTERACTION OPERATIONS =====
+
+  async getChatInteraction(id: string): Promise<ChatInteraction | undefined> {
+    return this.chatInteractions.get(id);
+  }
+
+  async createChatInteraction(insertInteraction: InsertChatInteraction): Promise<ChatInteraction> {
+    const id = randomUUID();
+    const now = new Date();
+    const interaction: ChatInteraction = {
+      ...insertInteraction,
+      id,
+      userId: insertInteraction.userId || null,
+      context: insertInteraction.context || null,
+      actionTaken: insertInteraction.actionTaken || null,
+      timestamp: now
+    };
+    this.chatInteractions.set(id, interaction);
+    return interaction;
+  }
+
+  async listChatInteractions(chatbotId: string): Promise<ChatInteraction[]> {
+    return Array.from(this.chatInteractions.values())
+      .filter(interaction => interaction.chatbotId === chatbotId)
+      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+  }
+
+  async deleteChatInteraction(id: string): Promise<boolean> {
+    return this.chatInteractions.delete(id);
+  }
+
   // ===== WORKFLOW EXECUTION OPERATIONS =====
 
   async getWorkflowExecution(id: string): Promise<WorkflowExecution | undefined> {
@@ -303,6 +376,8 @@ export class MemStorage implements IStorage {
     const execution: WorkflowExecution = {
       ...insertExecution,
       id,
+      stepData: insertExecution.stepData || null,
+      aiAssistanceUsed: insertExecution.aiAssistanceUsed ?? false,
       createdAt: now,
       updatedAt: now,
       completedAt: insertExecution.status === "completed" ? now : null

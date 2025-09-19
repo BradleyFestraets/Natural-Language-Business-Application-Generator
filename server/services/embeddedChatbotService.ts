@@ -2,13 +2,11 @@ import OpenAI from "openai";
 import WebSocket from "ws";
 import { 
   EmbeddedChatbot, 
+  InsertEmbeddedChatbot,
   ChatInteraction, 
+  InsertChatInteraction,
   GeneratedApplication,
-  BusinessRequirement,
-  insertEmbeddedChatbot,
-  insertChatInteraction,
-  selectEmbeddedChatbot,
-  selectChatInteraction
+  BusinessRequirement
 } from "../../shared/schema";
 import { storage } from "../storage";
 import { isAIServiceAvailable } from "../config/validation";
@@ -27,7 +25,7 @@ export interface ChatbotPersonality {
 }
 
 export interface ChatbotContext {
-  applicationId: string;
+  generatedApplicationId: string;
   currentPage?: string;
   formState?: Record<string, any>;
   userRole?: string;
@@ -82,7 +80,7 @@ export class EmbeddedChatbotService {
    * Create embedded chatbot for a generated application
    */
   async createEmbeddedChatbot(
-    applicationId: string,
+    generatedApplicationId: string,
     businessRequirement: BusinessRequirement,
     capabilities: ChatbotCapability[] = [],
     personality: ChatbotPersonality = {
@@ -93,29 +91,25 @@ export class EmbeddedChatbotService {
     }
   ): Promise<EmbeddedChatbot> {
     try {
-      // Extract contextual knowledge from business requirement
-      const contextualKnowledge = await this.extractContextualKnowledge(
+      // Generate system prompt from business requirement and personality
+      const systemPrompt = await this.generateSystemPrompt(
         businessRequirement,
-        applicationId
+        personality
       );
 
-      // Create chatbot configuration
-      const chatbot: Omit<EmbeddedChatbot, 'id'> = {
-        applicationId,
+      // Create chatbot configuration using actual schema fields
+      const chatbot: InsertEmbeddedChatbot = {
+        generatedApplicationId,
         name: this.generateChatbotName(businessRequirement),
-        contextualKnowledge,
+        systemPrompt,
         capabilities: capabilities.length > 0 ? capabilities.map(c => c.type) : [
           'form_help',
           'validation', 
           'process_guidance',
           'contextual_assistance'
         ],
-        conversationHistory: [],
         aiModel: 'gpt-4',
-        personalityConfig: personality,
-        triggerPoints: this.generateTriggerPoints(businessRequirement),
-        integrationAccess: [],
-        status: 'active'
+        isActive: true
       };
 
       // Store in database
@@ -124,12 +118,12 @@ export class EmbeddedChatbotService {
       // Cache configuration
       this.chatbotConfigs.set(createdChatbot.id, createdChatbot);
 
-      console.log(`[EmbeddedChatbot] Created chatbot ${createdChatbot.name} for application ${applicationId}`);
+      console.log(`[EmbeddedChatbot] Created chatbot ${createdChatbot.name} for application ${generatedApplicationId}`);
       
       return createdChatbot;
 
     } catch (error) {
-      console.error(`[EmbeddedChatbot] Error creating chatbot for application ${applicationId}:`, error);
+      console.error(`[EmbeddedChatbot] Error creating chatbot for application ${generatedApplicationId}:`, error);
       throw new Error(`Failed to create embedded chatbot: ${error}`);
     }
   }
@@ -158,7 +152,7 @@ export class EmbeddedChatbotService {
       const systemPrompt = this.buildSystemPrompt(chatbot, context);
       
       // Get recent conversation history
-      const recentHistory = this.getRecentHistory(chatbot, 5);
+      const recentHistory = await this.getRecentHistory(chatbotId, 5);
 
       // Create OpenAI messages
       const messages: any[] = [
@@ -171,9 +165,9 @@ export class EmbeddedChatbotService {
       const response = await this.openai.chat.completions.create({
         model: chatbot.aiModel === 'gpt-4' ? 'gpt-4o' : 'gpt-3.5-turbo',
         messages,
-        temperature: this.getTemperature(chatbot.personalityConfig),
+        temperature: this.getTemperature(chatbot.aiModel),
         max_tokens: 800,
-        functions: this.getChatbotFunctions(chatbot.capabilities),
+        functions: this.getChatbotFunctions(chatbot.capabilities || []),
         function_call: "auto"
       });
 
@@ -260,28 +254,46 @@ export class EmbeddedChatbotService {
   }
 
   /**
-   * Extract contextual knowledge from business requirements
+   * Generate system prompt from business requirements and personality
    */
-  private async extractContextualKnowledge(
+  private async generateSystemPrompt(
     businessRequirement: BusinessRequirement,
-    applicationId: string
-  ): Promise<Record<string, any>> {
-    return {
-      businessContext: businessRequirement.extractedData?.businessContext || {},
-      processes: businessRequirement.extractedData?.processes || [],
-      forms: businessRequirement.extractedData?.forms || [],
-      workflowPatterns: businessRequirement.extractedData?.workflowPatterns || [],
-      industry: businessRequirement.extractedData?.businessContext?.industry || 'general',
-      applicationPurpose: businessRequirement.originalDescription,
-      createdAt: new Date().toISOString()
-    };
+    personality: ChatbotPersonality
+  ): Promise<string> {
+    // Extract business context from extractedEntities (not extractedData)
+    const entities = businessRequirement.extractedEntities;
+    const businessContext = entities?.businessContext;
+    const processes = entities?.processes || [];
+    const forms = entities?.forms || [];
+    
+    const industry = businessContext?.industry || 'general';
+    const applicationPurpose = businessRequirement.originalDescription;
+
+    return `You are an intelligent assistant embedded in a ${industry} business application.
+
+PERSONALITY: You are ${personality.tone} and ${personality.style}, with ${personality.proactiveness} proactiveness and ${personality.expertiseLevel} expertise level.
+
+APPLICATION CONTEXT: This application handles: ${applicationPurpose}
+
+BUSINESS PROCESSES: ${processes.length > 0 ? JSON.stringify(processes.slice(0, 3)) : 'Standard business processes'}
+
+AVAILABLE FORMS: ${forms.length > 0 ? JSON.stringify(forms.slice(0, 3)) : 'Business forms'}
+
+GUIDELINES:
+1. Provide specific, actionable help based on the current context
+2. Use your business knowledge to give relevant suggestions
+3. Be concise but comprehensive
+4. Offer to take actions when appropriate
+5. Maintain conversation context across interactions
+
+Respond helpfully to user requests and provide contextual assistance.`;
   }
 
   /**
    * Generate appropriate chatbot name based on business requirement
    */
   private generateChatbotName(businessRequirement: BusinessRequirement): string {
-    const context = businessRequirement.extractedData?.businessContext;
+    const context = businessRequirement.extractedEntities?.businessContext;
     if (context?.industry) {
       return `${context.industry} Assistant`;
     }
@@ -295,11 +307,11 @@ export class EmbeddedChatbotService {
     const triggers = ['form_error', 'validation_failure', 'workflow_start'];
     
     // Add specific triggers based on business context
-    if (businessRequirement.extractedData?.forms?.length) {
+    if (businessRequirement.extractedEntities?.forms?.length) {
       triggers.push('form_completion_help');
     }
     
-    if (businessRequirement.extractedData?.approvals?.length) {
+    if (businessRequirement.extractedEntities?.approvals?.length) {
       triggers.push('approval_guidance');
     }
 
@@ -310,58 +322,56 @@ export class EmbeddedChatbotService {
    * Build context-aware system prompt for AI chatbot
    */
   private buildSystemPrompt(chatbot: EmbeddedChatbot, context: ChatbotContext): string {
-    const personality = chatbot.personalityConfig as ChatbotPersonality;
-    const knowledge = chatbot.contextualKnowledge;
+    // Use the stored systemPrompt and enhance it with current context
+    const basePrompt = chatbot.systemPrompt;
+    
+    const contextualAddition = `
 
-    return `You are ${chatbot.name}, an intelligent assistant embedded in a business application.
-
-PERSONALITY: You are ${personality.tone} and ${personality.style}, with ${personality.proactiveness} proactiveness.
-
-CONTEXT: You are helping users with a ${knowledge.industry || 'business'} application that handles: ${knowledge.applicationPurpose || 'business processes'}.
-
-CAPABILITIES: You can help with:
-${chatbot.capabilities.map(cap => `- ${cap.replace('_', ' ')}`).join('\n')}
-
-CURRENT CONTEXT:
-- Application: ${context.applicationId}
+CURRENT SESSION CONTEXT:
+- Application: ${context.generatedApplicationId}
 - Current Page: ${context.currentPage || 'main'}
 - User Role: ${context.userRole || 'user'}
 - Workflow State: ${context.workflowState || 'active'}
 
-BUSINESS KNOWLEDGE:
-${knowledge.processes ? `Processes: ${JSON.stringify(knowledge.processes, null, 2)}` : ''}
-${knowledge.forms ? `Forms: ${JSON.stringify(knowledge.forms, null, 2)}` : ''}
+AVAILABLE CAPABILITIES:
+${(chatbot.capabilities || []).map(cap => `- ${cap.replace('_', ' ')}`).join('\n')}
 
-GUIDELINES:
-1. Provide specific, actionable help based on the current context
-2. Use your business knowledge to give relevant suggestions
-3. Be concise but comprehensive
-4. Offer to take actions when appropriate
-5. Maintain conversation context across interactions
+Please respond helpfully to the user's request using this context.`;
 
-Respond helpfully to the user's request.`;
+    return basePrompt + contextualAddition;
   }
 
   /**
-   * Get recent conversation history
+   * Get recent conversation history from stored interactions
    */
-  private getRecentHistory(chatbot: EmbeddedChatbot, limit: number = 5): any[] {
-    const history = chatbot.conversationHistory || [];
-    return history.slice(-limit * 2).map((msg: any) => ({
-      role: msg.role,
-      content: msg.content
-    }));
+  private async getRecentHistory(chatbotId: string, limit: number = 5): Promise<any[]> {
+    try {
+      const interactions = await storage.listChatInteractions(chatbotId);
+      const recent = interactions.slice(0, limit);
+      
+      // Convert to OpenAI message format
+      const messages: any[] = [];
+      for (const interaction of recent.reverse()) {
+        messages.push({ role: 'user', content: interaction.userMessage });
+        messages.push({ role: 'assistant', content: interaction.botResponse });
+      }
+      
+      return messages.slice(-limit * 2); // Limit total messages
+    } catch (error) {
+      console.error('[EmbeddedChatbot] Error getting conversation history:', error);
+      return [];
+    }
   }
 
   /**
-   * Get temperature setting based on personality
+   * Get temperature setting based on chatbot model
    */
-  private getTemperature(personality: ChatbotPersonality): number {
-    switch (personality.tone) {
-      case 'creative': return 0.8;
-      case 'friendly': return 0.6;
-      case 'professional': return 0.3;
-      case 'concise': return 0.2;
+  private getTemperature(aiModel: string): number {
+    // Use consistent temperature based on model
+    switch (aiModel) {
+      case 'gpt-4': return 0.3;
+      case 'gpt-3.5-turbo': return 0.4;
+      case 'claude-3': return 0.3;
       default: return 0.4;
     }
   }
