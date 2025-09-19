@@ -224,6 +224,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         workflowPattern,
         userId,
         applicationId,
+        req.organizationId, // CRITICAL: Pass organizationId for multi-tenant security
         undefined,
         initialData
       );
@@ -251,7 +252,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get process analytics dashboard
   app.get("/api/process/analytics", isAuthenticated, requireOrganization, async (req: any, res: Response) => {
     try {
-      const dashboard = processMonitoringService.getProcessDashboard();
+      const dashboard = processMonitoringService.getProcessDashboard(req.organizationId);
       res.status(200).json(dashboard);
     } catch (error) {
       console.error("Failed to get process analytics:", error);
@@ -504,7 +505,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Valid template ID is required" });
       }
       
-      const template = await templateGenerationService.getTemplateById(templateId);
+      const template = await templateGenerationService.getTemplateById(templateId, req.organizationId);
       
       if (!template) {
         return res.status(404).json({ message: "Template not found" });

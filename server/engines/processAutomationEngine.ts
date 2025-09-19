@@ -15,6 +15,7 @@ export interface ProcessAutomationOptions {
 export interface ProcessExecution {
   executionId: string;
   workflowId: string;
+  organizationId: string; // CRITICAL: Added for multi-tenant security isolation
   status: "running" | "paused" | "completed" | "failed" | "cancelled";
   currentStep: string;
   progress: number;
@@ -99,6 +100,7 @@ export class ProcessAutomationEngine extends WorkflowExecutionEngine {
     workflowPattern: WorkflowPattern,
     userId: string,
     applicationId: string,
+    organizationId: string, // CRITICAL: Required for multi-tenant security
     businessRequirement?: BusinessRequirement,
     initialData: Record<string, any> = {}
   ): Promise<ProcessExecution> {
@@ -115,6 +117,7 @@ export class ProcessAutomationEngine extends WorkflowExecutionEngine {
       const processExecution: ProcessExecution = {
         executionId: execution.id,
         workflowId: workflowPattern.id,
+        organizationId, // CRITICAL: Set organizationId for multi-tenant isolation
         status: "running",
         currentStep: workflowPattern.steps[0].id,
         progress: 0,

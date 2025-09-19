@@ -82,7 +82,7 @@ export interface TemplateDefinition {
   
   // Source tracking
   sourceApplicationId?: string;
-  organizationId?: string; // For multi-tenant organization scoping
+  organizationId: string; // REQUIRED for multi-tenant organization scoping
   createdAt: Date;
   updatedAt: Date;
 }

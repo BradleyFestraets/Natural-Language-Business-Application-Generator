@@ -94,8 +94,10 @@ export class ProcessMonitoringService {
   /**
    * Get real-time process analytics
    */
-  getProcessAnalytics(): ProcessAnalytics {
-    const processes = Array.from(this.processHistory.values());
+  getProcessAnalytics(organizationId: string): ProcessAnalytics {
+    // CRITICAL: Filter by organization to prevent cross-tenant data exposure
+    const processes = Array.from(this.processHistory.values())
+      .filter(p => p.organizationId === organizationId);
     const total = processes.length;
     const active = processes.filter(p => p.status === "running").length;
     const completed = processes.filter(p => p.status === "completed").length;
@@ -173,12 +175,12 @@ export class ProcessMonitoringService {
   /**
    * Get process dashboard data
    */
-  getProcessDashboard(): ProcessDashboard {
+  getProcessDashboard(organizationId: string): ProcessDashboard {
     return {
-      analytics: this.getProcessAnalytics(),
+      analytics: this.getProcessAnalytics(organizationId),
       recentAlerts: this.getRecentAlerts(),
       activeProcesses: Array.from(this.processHistory.values())
-        .filter(p => p.status === "running")
+        .filter(p => p.status === "running" && p.organizationId === organizationId)
         .slice(0, 10), // Latest 10 active processes
       performance: this.getPerformanceMetrics(),
       trends: this.generateTrends()
@@ -241,12 +243,12 @@ export class ProcessMonitoringService {
   /**
    * Generate process performance report
    */
-  generatePerformanceReport(timeRange: "day" | "week" | "month" = "day"): {
+  generatePerformanceReport(organizationId: string, timeRange: "day" | "week" | "month" = "day"): {
     summary: ProcessAnalytics;
     insights: string[];
     recommendations: string[];
   } {
-    const analytics = this.getProcessAnalytics();
+    const analytics = this.getProcessAnalytics(organizationId);
     const insights: string[] = [];
     const recommendations: string[] = [];
 
@@ -437,21 +439,29 @@ export class ProcessMonitoringService {
    */
   private startAlertMonitoring(): void {
     setInterval(() => {
-      // Check for system-wide issues every 30 seconds
-      const analytics = this.getProcessAnalytics();
+      // Check for issues across all organizations every 30 seconds
+      // SECURITY: Monitor each organization separately to prevent data leakage
+      const organizationIds = new Set(
+        Array.from(this.processHistory.values()).map(p => p.organizationId)
+      );
       
-      // Monitor overall system health
-      if (analytics.failedProcesses > 0 && 
-          analytics.failedProcesses / analytics.totalProcesses > 0.2) {
-        this.createAlert(
-          "failure_spike",
-          "high",
-          `System-wide failure rate: ${Math.round((analytics.failedProcesses / analytics.totalProcesses) * 100)}%`,
-          undefined,
-          undefined,
-          { systemFailureRate: analytics.failedProcesses / analytics.totalProcesses }
-        );
-      }
+      organizationIds.forEach(orgId => {
+        if (!orgId) return; // Skip processes without organizationId
+        const analytics = this.getProcessAnalytics(orgId);
+        
+        // Monitor overall system health per organization
+        if (analytics.failedProcesses > 0 && 
+            analytics.failedProcesses / analytics.totalProcesses > 0.2) {
+          this.createAlert(
+            "failure_spike",
+            "high",
+            `Org ${orgId} failure rate: ${Math.round((analytics.failedProcesses / analytics.totalProcesses) * 100)}%`,
+            undefined,
+            undefined,
+            { organizationFailureRate: analytics.failedProcesses / analytics.totalProcesses, organizationId: orgId }
+          );
+        }
+      }); // Close organizationIds.forEach
     }, 30000); // Every 30 seconds
   }
 
