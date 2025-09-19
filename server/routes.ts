@@ -2,7 +2,7 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer } from "ws";
 import url from "url";
-import { storage } from "./storage";
+import { storage as defaultStorage, type IStorage } from "./storage";
 import { z } from "zod";
 import { insertBusinessRequirementSchema, insertGeneratedApplicationSchema, insertEmbeddedChatbotSchema, insertChatInteractionSchema } from "@shared/schema";
 import { NLPService } from "./services/nlpService.js";
@@ -91,7 +91,9 @@ const refineRequirementsSchema = z.object({
   sessionId: z.string()
 });
 
-export async function registerRoutes(app: Express): Promise<Server> {
+export async function registerRoutes(app: Express, injectedStorage?: IStorage): Promise<Server> {
+  // Use injected storage for testing or default storage for production
+  const storage = injectedStorage || defaultStorage;
   
   // Set up authentication first
   await setupAuth(app);

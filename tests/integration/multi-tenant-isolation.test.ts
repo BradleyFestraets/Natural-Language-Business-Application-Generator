@@ -38,7 +38,7 @@ describe("Multi-tenant Data Isolation - Enterprise Security", () => {
       next();
     });
     
-    server = await registerRoutes(app);
+    server = await registerRoutes(app, storage);
   });
 
   afterEach(async () => {

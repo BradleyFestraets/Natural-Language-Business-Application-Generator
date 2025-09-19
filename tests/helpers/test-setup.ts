@@ -18,8 +18,8 @@ import {
  * Provides comprehensive mocking for multi-tenant authentication, storage, and external services
  */
 
-// Extended mock session data type
-type MockSessionData = typeof mockSessionData;
+// Mock session data type
+export type MockSessionType = typeof mockSessionData;
 
 /**
  * Mock authentication middleware that injects test session data
