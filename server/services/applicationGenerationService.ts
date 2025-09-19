@@ -407,7 +407,7 @@ Focus on enterprise-grade patterns with TypeScript, proper error handling, and s
 
     try {
       const response = await this.openai.chat.completions.create({
-        model: "gpt-4",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: this.getAnalysisSystemPrompt() },
           { role: "user", content: analysisPrompt }
@@ -472,7 +472,7 @@ Generate clean, production-ready code with proper imports and exports.`;
 
     try {
       const response = await this.openai.chat.completions.create({
-        model: "gpt-4",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: this.getComponentGenerationSystemPrompt() },
           { role: "user", content: componentPrompt }
@@ -560,7 +560,7 @@ Generate TypeScript code for this integration with:
 
     try {
       const response = await this.openai.chat.completions.create({
-        model: "gpt-4",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: "You are an expert integration developer. Generate production-ready integration code." },
           { role: "user", content: integrationPrompt }
@@ -604,7 +604,7 @@ Generate:
 
     try {
       const response = await this.openai.chat.completions.create({
-        model: "gpt-4",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: "You are a technical documentation expert. Generate clear, comprehensive documentation." },
           { role: "user", content: docPrompt }

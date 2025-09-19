@@ -115,7 +115,7 @@ Generated schema should be production-ready and follow database best practices.`
 
     try {
       const response = await this.openai.chat.completions.create({
-        model: "gpt-4",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: "You are an expert database architect. Generate production-ready Drizzle ORM schemas with proper relationships and constraints." },
           { role: "user", content: prompt }
@@ -160,7 +160,7 @@ Generated schema should be complete and production-ready.`;
 
     try {
       const response = await this.openai.chat.completions.create({
-        model: "gpt-4",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: "You are an expert database architect. Generate production-ready Drizzle ORM table schemas with proper constraints." },
           { role: "user", content: prompt }
@@ -205,7 +205,7 @@ Generated schema should be complete and support complex business workflows.`;
 
     try {
       const response = await this.openai.chat.completions.create({
-        model: "gpt-4",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: "You are an expert database architect. Generate production-ready workflow schemas with proper state management." },
           { role: "user", content: prompt }
@@ -249,7 +249,7 @@ Generated seed data should be comprehensive and realistic.`;
 
     try {
       const response = await this.openai.chat.completions.create({
-        model: "gpt-4",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: "You are an expert database developer. Generate comprehensive seed data for business applications." },
           { role: "user", content: prompt }
@@ -294,7 +294,7 @@ Generated helpers should be production-ready and efficient.`;
 
     try {
       const response = await this.openai.chat.completions.create({
-        model: "gpt-4",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: "You are an expert database developer. Generate efficient query helpers for business applications." },
           { role: "user", content: prompt }

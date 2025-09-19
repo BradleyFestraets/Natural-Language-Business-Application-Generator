@@ -73,7 +73,7 @@ export class ClarificationService {
 
     try {
       const response = await this.openai.chat.completions.create({
-        model: "gpt-4",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: analysisPrompt }
@@ -216,7 +216,7 @@ Provide analysis with confidence score (0-1) and determine if follow-up is neede
 
     try {
       const response_ai = await this.openai.chat.completions.create({
-        model: "gpt-4",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: "You are a business requirement validation expert." },
           { role: "user", content: validationPrompt }
@@ -282,7 +282,7 @@ Provide analysis with confidence score (0-1) and determine if follow-up is neede
 
     try {
       const response = await this.openai.chat.completions.create({
-        model: "gpt-4",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: this.getRefinementSystemPrompt() },
           { role: "user", content: refinementPrompt }

@@ -123,7 +123,7 @@ Generated component should be complete and production-ready.`;
 
     try {
       const response = await this.openai.chat.completions.create({
-        model: "gpt-4",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: "You are an expert React/TypeScript developer. Generate production-ready React components using modern patterns and Shadcn UI." },
           { role: "user", content: prompt }
@@ -166,7 +166,7 @@ Generated component should be complete and production-ready.`;
 
     try {
       const response = await this.openai.chat.completions.create({
-        model: "gpt-4",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: "You are an expert React developer. Generate production-ready form components with proper validation and UX." },
           { role: "user", content: prompt }
@@ -209,7 +209,7 @@ Generated component should be complete and production-ready.`;
 
     try {
       const response = await this.openai.chat.completions.create({
-        model: "gpt-4",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: "You are an expert React developer. Generate production-ready process/workflow components with proper state management." },
           { role: "user", content: prompt }
@@ -252,7 +252,7 @@ Generated component should be complete and production-ready.`;
 
     try {
       const response = await this.openai.chat.completions.create({
-        model: "gpt-4",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: "You are an expert React developer. Generate production-ready dashboard components with data visualization." },
           { role: "user", content: prompt }
@@ -294,7 +294,7 @@ Generated component should be complete and production-ready.`;
 
     try {
       const response = await this.openai.chat.completions.create({
-        model: "gpt-4",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: "You are an expert React developer. Generate production-ready layout components with navigation and accessibility." },
           { role: "user", content: prompt }
@@ -336,7 +336,7 @@ Generated types should be complete and production-ready.`;
 
     try {
       const response = await this.openai.chat.completions.create({
-        model: "gpt-4",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: "You are an expert TypeScript developer. Generate comprehensive type definitions for business applications." },
           { role: "user", content: prompt }

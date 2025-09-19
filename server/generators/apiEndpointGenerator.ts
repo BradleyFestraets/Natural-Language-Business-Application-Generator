@@ -114,7 +114,7 @@ Generated code should be production-ready and follow REST API best practices.`;
 
     try {
       const response = await this.openai.chat.completions.create({
-        model: "gpt-4",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: "You are an expert backend developer. Generate production-ready Express.js APIs with proper middleware and security." },
           { role: "user", content: prompt }
@@ -159,7 +159,7 @@ Generated endpoints should be production-ready and follow REST API conventions.`
 
     try {
       const response = await this.openai.chat.completions.create({
-        model: "gpt-4",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: "You are an expert backend developer. Generate production-ready CRUD APIs with proper validation and error handling." },
           { role: "user", content: prompt }
@@ -204,7 +204,7 @@ Generated endpoints should be production-ready and support complex business work
 
     try {
       const response = await this.openai.chat.completions.create({
-        model: "gpt-4",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: "You are an expert backend developer. Generate production-ready workflow APIs with proper state management." },
           { role: "user", content: prompt }
@@ -248,7 +248,7 @@ Generated schemas should be complete and production-ready.`;
 
     try {
       const response = await this.openai.chat.completions.create({
-        model: "gpt-4",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: "You are an expert TypeScript developer. Generate comprehensive Zod validation schemas for business applications." },
           { role: "user", content: prompt }
@@ -294,7 +294,7 @@ Generated middleware should be production-ready and secure.`;
 
     try {
       const response = await this.openai.chat.completions.create({
-        model: "gpt-4",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: "You are an expert backend developer. Generate production-ready Express.js middleware with security best practices." },
           { role: "user", content: prompt }
