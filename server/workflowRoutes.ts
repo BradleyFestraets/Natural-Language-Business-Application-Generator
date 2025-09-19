@@ -211,7 +211,7 @@ export function registerWorkflowRoutes(app: Express) {
       
       res.status(200).json({
         executionId,
-        status: execution?.status || "paused",
+        status: execution?.status || "in_progress",
         message: "Workflow execution paused successfully"
       });
       
@@ -241,7 +241,7 @@ export function registerWorkflowRoutes(app: Express) {
       
       res.status(200).json({
         executionId,
-        status: execution?.status || "running",
+        status: execution?.status || "in_progress",
         message: "Workflow execution resumed successfully"
       });
       

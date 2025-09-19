@@ -133,9 +133,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // SECURITY CRITICAL: Use organization-scoped execution listing to prevent cross-tenant data exposure
       const organizationExecutions = await getWorkflowExecutionEngine().listUserExecutionsByOrg(userId, req.organizationId);
       
-      // Filter for active executions (running, pending, paused) within the user's organization
+      // Filter for active executions (in_progress, pending) within the user's organization
       const activeExecutions = organizationExecutions.filter(execution => 
-        ["running", "pending", "paused"].includes(execution.status)
+        ["in_progress", "pending"].includes(execution.status)
       );
       
       res.json(activeExecutions);
