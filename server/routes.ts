@@ -15,6 +15,7 @@ import { setupAuth, isAuthenticated } from "./replitAuth";
 import { registerWorkflowRoutes } from "./workflowRoutes";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
+import cookieSignature from 'cookie-signature';
 import { requireAIServiceMiddleware, checkAIServiceMiddleware } from "./middleware/aiServiceMiddleware";
 import { globalServiceHealth } from "./config/validation";
 import type { ExtractedBusinessData } from "./services/nlpService";
@@ -30,13 +31,19 @@ import {
 
 // Validation schemas for API requests (userId removed - derived from auth session)
 const parseBusinessDescriptionSchema = z.object({
-  description: z.string().min(10, "Description must be at least 10 characters"),
+  description: z.string()
+    .min(10, "Description must be at least 10 characters")
+    .max(10000, "Description cannot exceed 10,000 characters")
+    .refine(desc => desc.trim().length >= 10, "Description must contain meaningful content"),
   conversationId: z.string().optional(),
   context: z.record(z.any()).optional()
 });
 
 const validateDescriptionSchema = z.object({
-  description: z.string().min(1, "Description cannot be empty")
+  description: z.string()
+    .min(1, "Description cannot be empty")
+    .max(10000, "Description cannot exceed 10,000 characters")
+    .refine(desc => desc.trim().length >= 1, "Description must contain meaningful content")
 });
 
 const generateApplicationSchema = z.object({
@@ -362,8 +369,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: "analyzing"
       });
 
-      // SECURITY CRITICAL: Create analysis session with organization tracking
-      nlpAnalysisService.createAnalysisSession(analysisSessionId, userId, req.organizationId, businessRequirement.id);
+      // SECURITY: Generate CSRF token for WebSocket connection
+      const csrfToken = `csrf_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+      
+      // SECURITY CRITICAL: Create analysis session with organization and CSRF token tracking
+      nlpAnalysisService.createAnalysisSession(analysisSessionId, userId, req.organizationId, businessRequirement.id, csrfToken);
       
       // Start streaming analysis in background
       const onUpdate = (update: any) => {
@@ -436,7 +446,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         analysisSessionId,
         businessRequirementId: businessRequirement.id,
         status: "started",
-        websocketUrl: `/ws/nlp-analysis/${analysisSessionId}`
+        websocketUrl: `/ws/nlp-analysis/${analysisSessionId}`,
+        csrfToken
       });
     } catch (error) {
       console.error("Failed to start streaming analysis:", error);
@@ -1071,6 +1082,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   httpServer.on("upgrade", async (request, socket, head) => {
     const { pathname } = url.parse(request.url || "");
     
+    // CRITICAL: Only handle our specific WebSocket paths, let Vite HMR handle its own
+    if (!pathname?.startsWith("/ws/")) {
+      return; // Let other handlers (like Vite HMR) handle this WebSocket
+    }
+    
     // Parse cookies for session authentication first (needed for CSRF validation)
     const cookieHeader = request.headers.cookie;
     const rawSessionCookie = cookieHeader?.split(';').find(c => c.trim().startsWith('connect.sid='))?.split('=')[1];
@@ -1079,7 +1095,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     let sessionId: string | null = null;
     if (rawSessionCookie) {
       try {
-        const cookieSignature = require('cookie-signature');
+        // cookieSignature already imported at top of file
         const decodedCookie = decodeURIComponent(rawSessionCookie);
         // Remove 's:' prefix and unsign with SESSION_SECRET
         if (decodedCookie.startsWith('s:')) {

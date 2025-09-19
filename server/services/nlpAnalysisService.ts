@@ -16,6 +16,7 @@ interface AnalysisSessionMetadata {
   organizationId: string;
   businessRequirementId: string;
   createdAt: Date;
+  csrfToken?: string;
 }
 
 /**
@@ -47,13 +48,14 @@ class NLPAnalysisService {
   /**
    * SECURITY CRITICAL: Create analysis session with organization tracking
    */
-  createAnalysisSession(analysisSessionId: string, userId: string, organizationId: string, businessRequirementId: string): void {
+  createAnalysisSession(analysisSessionId: string, userId: string, organizationId: string, businessRequirementId: string, csrfToken?: string): void {
     this.sessionMetadata.set(analysisSessionId, {
       analysisSessionId,
       userId,
       organizationId,
       businessRequirementId,
-      createdAt: new Date()
+      createdAt: new Date(),
+      csrfToken
     });
   }
 

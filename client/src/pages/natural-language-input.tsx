@@ -46,9 +46,9 @@ export default function NaturalLanguageInputPage() {
   }, []);
 
   // WebSocket connection management
-  const connectWebSocket = (analysisSessionId: string) => {
+  const connectWebSocket = (analysisSessionId: string, csrfToken?: string) => {
     const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws/nlp-analysis/${analysisSessionId}`;
-    const ws = new WebSocket(wsUrl);
+    const ws = csrfToken ? new WebSocket(wsUrl, `csrf-${csrfToken}`) : new WebSocket(wsUrl);
     
     ws.onopen = () => {
       console.log('Connected to NLP analysis WebSocket');
@@ -134,7 +134,7 @@ export default function NaturalLanguageInputPage() {
       setStreamingMessage("Starting AI analysis...");
       
       // Connect to WebSocket for real-time updates
-      connectWebSocket(data.analysisSessionId);
+      connectWebSocket(data.analysisSessionId, data.csrfToken);
     },
     onError: (error) => {
       if (isUnauthorizedError(error as Error)) {
