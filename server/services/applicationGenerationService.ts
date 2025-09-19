@@ -5,6 +5,8 @@ import { WebSocket } from "ws";
 import { ReactComponentGenerator } from "../generators/reactComponentGenerator";
 import { ApiEndpointGenerator } from "../generators/apiEndpointGenerator";
 import { DatabaseSchemaGenerator } from "../generators/databaseSchemaGenerator";
+import { WorkflowGenerationService } from "./workflowGenerationService";
+import { WorkflowUIGenerator } from "../generators/workflowUIGenerator";
 import { ApplicationDeployer } from "../deployment/applicationDeployer";
 import { storage } from "../storage";
 import { join } from "path";
@@ -32,6 +34,7 @@ export interface GeneratedCode {
   apiEndpoints: { [filename: string]: string };
   databaseSchema: { [filename: string]: string };
   integrations: { [filename: string]: string };
+  workflows: { [filename: string]: string };
   documentation: { [filename: string]: string };
 }
 
@@ -55,6 +58,8 @@ export class ApplicationGenerationService {
   private reactGenerator: ReactComponentGenerator;
   private apiGenerator: ApiEndpointGenerator;
   private schemaGenerator: DatabaseSchemaGenerator;
+  private workflowGenerator: WorkflowGenerationService;
+  private workflowUIGenerator: WorkflowUIGenerator;
   private deployer: ApplicationDeployer;
 
   constructor() {
@@ -70,6 +75,8 @@ export class ApplicationGenerationService {
     this.reactGenerator = new ReactComponentGenerator();
     this.apiGenerator = new ApiEndpointGenerator();
     this.schemaGenerator = new DatabaseSchemaGenerator();
+    this.workflowGenerator = new WorkflowGenerationService();
+    this.workflowUIGenerator = new WorkflowUIGenerator();
     this.deployer = new ApplicationDeployer();
   }
 
@@ -188,7 +195,53 @@ export class ApplicationGenerationService {
         estimatedTimeRemaining: 250
       });
 
-      // Phase 5: Generate integrations if requested
+      // Phase 5: Generate workflows if requested
+      let workflows: { [filename: string]: string } = {};
+      if (finalOptions.includeWorkflows) {
+        this.updateProgress(applicationId, {
+          stage: "generating_components",
+          progress: 80,
+          message: "Generating workflow patterns...",
+          currentComponent: "Workflow System",
+          estimatedTimeRemaining: 200
+        });
+        
+        const workflowSystem = await this.workflowGenerator.generateWorkflowSystem(businessRequirement, {
+          includeApprovals: true,
+          includeNotifications: true,
+          includeExternalIntegrations: finalOptions.includeIntegrations,
+          generateUI: false, // Let WorkflowUIGenerator handle UI
+          complexity: "advanced"
+        });
+        
+        // Generate comprehensive workflow UI using WorkflowUIGenerator
+        const workflowUIResult = await this.workflowUIGenerator.generateWorkflowUI(
+          workflowSystem.workflows,
+          businessRequirement,
+          {
+            includeRouting: true,
+            includeStateManagement: true,
+            includeRealTimeUpdates: true,
+            includeAccessControl: true,
+            uiFramework: "react",
+            styleFramework: "tailwind"
+          }
+        );
+        
+        // Store workflow patterns and comprehensive UI components
+        workflows["workflowPatterns.ts"] = JSON.stringify(workflowSystem.workflows, null, 2);
+        workflows["workflowUIComponents.ts"] = Object.entries(workflowUIResult.components)
+          .map(([name, code]) => `// ${name}\n${code}`).join("\n\n");
+        workflows["workflowPages.tsx"] = Object.entries(workflowUIResult.pages)
+          .map(([name, code]) => `// ${name}\n${code}`).join("\n\n");
+        workflows["workflowHooks.ts"] = Object.entries(workflowUIResult.hooks)
+          .map(([name, code]) => `// ${name}\n${code}`).join("\n\n");
+        workflows["workflowUtils.ts"] = Object.entries(workflowUIResult.utils)
+          .map(([name, code]) => `// ${name}\n${code}`).join("\n\n");
+        workflows["workflowDocumentation.md"] = workflowSystem.documentation;
+      }
+      
+      // Phase 6: Generate integrations if requested
       let integrations: { [filename: string]: string } = {};
       if (finalOptions.includeIntegrations) {
         integrations = await this.generateIntegrations(businessRequirement, generationPlan);
@@ -197,11 +250,11 @@ export class ApplicationGenerationService {
       this.updateProgress(applicationId, {
         stage: "integrating",
         progress: 85,
-        message: "Integrating components...",
+        message: "Integrating components and workflows...",
         estimatedTimeRemaining: 150
       });
 
-      // Phase 6: Generate documentation
+      // Phase 7: Generate documentation
       let documentation: { [filename: string]: string } = {};
       if (finalOptions.generateDocumentation) {
         documentation = await this.generateDocumentation(businessRequirement, {
@@ -209,7 +262,7 @@ export class ApplicationGenerationService {
           apiEndpoints,
           databaseSchema,
           integrations,
-          documentation: {}
+          documentation: workflows
         });
       }
 
@@ -248,7 +301,8 @@ export class ApplicationGenerationService {
         {
           components,
           apiEndpoints,
-          databaseSchema
+          databaseSchema,
+          workflows
         }
       );
 
@@ -281,6 +335,7 @@ export class ApplicationGenerationService {
           apiEndpoints,
           databaseSchema,
           integrations,
+          workflows,
           documentation
         },
         metrics: {
@@ -309,6 +364,7 @@ export class ApplicationGenerationService {
           apiEndpoints: {},
           databaseSchema: {},
           integrations: {},
+          workflows: {},
           documentation: {}
         },
         errors: [error instanceof Error ? error.message : "Unknown error"],

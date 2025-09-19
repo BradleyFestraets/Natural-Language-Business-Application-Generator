@@ -8,6 +8,8 @@ import Login from "@/pages/login";
 import NaturalLanguageInput from "@/pages/natural-language-input";
 import ApplicationDashboard from "@/pages/application-dashboard";
 import ApplicationViewer from "@/pages/application-viewer";
+import WorkflowDashboard from "@/pages/workflow-dashboard";
+import WorkflowExecution from "@/pages/workflow-execution";
 
 function Router() {
   return (
@@ -19,6 +21,11 @@ function Router() {
       <Route path="/" component={NaturalLanguageInput} />
       <Route path="/dashboard" component={ApplicationDashboard} />
       <Route path="/application/:id" component={ApplicationViewer} />
+      
+      {/* Workflow Management Routes */}
+      <Route path="/workflows" component={WorkflowDashboard} />
+      <Route path="/workflows/:workflowId/start" component={WorkflowExecution} />
+      <Route path="/workflows/executions/:executionId" component={WorkflowExecution} />
       
       {/* Fallback to 404 */}
       <Route component={NotFound} />

@@ -8,8 +8,11 @@ import { insertBusinessRequirementSchema, insertGeneratedApplicationSchema, inse
 import { NLPService } from "./services/nlpService.js";
 import { ClarificationService } from "./services/clarificationService";
 import { ApplicationGenerationService } from "./services/applicationGenerationService";
+import { WorkflowGenerationService } from "./services/workflowGenerationService";
+import { getWorkflowExecutionEngine } from "./engines/workflowExecutionEngineInstance";
 import { nlpAnalysisService } from "./services/nlpAnalysisService";
 import { setupAuth, isAuthenticated } from "./replitAuth";
+import { registerWorkflowRoutes } from "./workflowRoutes";
 import { requireAIServiceMiddleware, checkAIServiceMiddleware } from "./middleware/aiServiceMiddleware";
 import { globalServiceHealth } from "./config/validation";
 import type { ExtractedBusinessData } from "./services/nlpService";
@@ -74,6 +77,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const nlpService = new NLPService();
   const clarificationService = new ClarificationService();
   const applicationGenerationService = new ApplicationGenerationService();
+  const workflowGenerationService = new WorkflowGenerationService();
+  
+  // ===== WORKFLOW MANAGEMENT ENDPOINTS =====
+  
+  // Get all available workflow patterns  
+  app.get("/api/workflows", isAuthenticated, requireOrganization, async (req: AuthorizedRequest, res: Response) => {
+    try {
+      // Get all generated applications for the organization to extract workflow patterns
+      const generatedApps = await storage.getGeneratedApplicationsByOrganization(req.organizationId!);
+      
+      const workflows: any[] = [];
+      
+      // Extract workflow patterns from generated applications
+      for (const app of generatedApps) {
+        if (app.generatedWorkflows && Array.isArray(app.generatedWorkflows)) {
+          workflows.push(...app.generatedWorkflows.map(workflow => ({
+            ...workflow,
+            applicationId: app.id,
+            applicationName: app.name,
+            activeExecutions: 0, // TODO: Calculate from actual executions
+            completedToday: 0 // TODO: Calculate from actual executions
+          })));
+        }
+      }
+      
+      // If no workflows found, return some sample patterns for demonstration
+      if (workflows.length === 0) {
+        workflows.push({
+          id: "sample-approval-workflow",
+          name: "Approval Workflow",
+          description: "Basic approval process for business requests",
+          type: "sequential",
+          complexity: "medium",
+          estimatedDuration: 4,
+          activeExecutions: 0,
+          completedToday: 0
+        });
+      }
+      
+      res.json(workflows);
+    } catch (error) {
+      console.error("Error fetching workflows:", error);
+      res.status(500).json({ message: "Failed to fetch workflows" });
+    }
+  });
+  
+  // Get active workflow executions
+  app.get("/api/workflows/executions/active", isAuthenticated, requireOrganization, async (req: AuthorizedRequest, res: Response) => {
+    try {
+      // Get all workflow executions and filter for active ones
+      const allExecutions = await getWorkflowExecutionEngine().getAllExecutions();
+      
+      // Filter for active executions (running, pending, paused)
+      const activeExecutions = allExecutions.filter(execution => 
+        ["running", "pending", "paused"].includes(execution.status)
+      );
+      
+      res.json(activeExecutions);
+    } catch (error) {
+      console.error("Error fetching active executions:", error);
+      res.status(500).json({ message: "Failed to fetch active executions" });
+    }
+  });
+  
+  // Register workflow execution routes
+  registerWorkflowRoutes(app);
   
   // Helper function to convert database entities to service types
   function convertToExtractedBusinessData(businessRequirement: any): ExtractedBusinessData {
@@ -672,23 +741,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Generated application not found" });
       }
       
-      // TODO: Implement actual workflow generation logic
-      const workflowId = `workflow-${Date.now()}`;
-      const generatedSteps = generateWorkflowSteps(workflowType, configuration);
+      // Get business requirement to generate workflow
+      const businessRequirement = await storage.getBusinessRequirement(generatedApp.businessRequirementId);
+      if (!businessRequirement) {
+        return res.status(404).json({ message: "Business requirement not found" });
+      }
+      
+      // Generate comprehensive workflow system
+      const workflowSystem = await workflowGenerationService.generateWorkflowSystem(
+        businessRequirement,
+        {
+          includeApprovals: true,
+          includeNotifications: true,
+          includeExternalIntegrations: true,
+          generateUI: true,
+          complexity: configuration?.complexity || "advanced",
+          targetRoles: configuration?.targetRoles || ["manager", "employee", "admin"]
+        }
+      );
       
       res.status(200).json({
-        workflowId,
-        generatedSteps,
-        status: "completed",
-        workflowType,
-        configuration
+        workflowSystem,
+        totalWorkflows: workflowSystem.workflows.length,
+        generatedComponents: Object.keys(workflowSystem.uiComponents).length,
+        status: "completed"
       });
       
     } catch (error) {
+      console.error("Workflow generation failed:", error);
       if (error instanceof z.ZodError) {
         res.status(400).json({ message: error.errors[0].message });
       } else {
-        res.status(500).json({ message: "Internal server error generating workflow" });
+        res.status(500).json({ 
+          message: "Internal server error generating workflow",
+          error: error instanceof Error ? error.message : "Unknown error"
+        });
       }
     }
   });
@@ -969,6 +1056,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
         socket.write('HTTP/1.1 500 Internal Server Error\r\n\r\n');
         socket.destroy();
       }
+    }
+    
+    // Handle workflow execution progress WebSocket connections
+    else if (pathname?.startsWith("/ws/workflow-progress/")) {
+      const executionId = pathname.split("/").pop();
+      
+      if (!executionId) {
+        socket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
+        socket.destroy();
+        return;
+      }
+      
+      // Authenticate WebSocket connection
+      if (!sessionId) {
+        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+        socket.destroy();
+        return;
+      }
+      
+      try {
+        // Verify workflow execution exists and user has permission
+        const workflowExecution = await storage.getWorkflowExecution(executionId);
+        if (!workflowExecution) {
+          socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
+          socket.destroy();
+          return;
+        }
+        
+        // Check if user has permission to access this workflow execution
+        // Get the application to verify ownership
+        const generatedApp = await storage.getGeneratedApplication(workflowExecution.applicationId);
+        if (!generatedApp) {
+          socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+          socket.destroy();
+          return;
+        }
+        
+        // Get business requirement to check ownership
+        const businessRequirement = await storage.getBusinessRequirement(generatedApp.businessRequirementId);
+        if (!businessRequirement) {
+          socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+          socket.destroy();
+          return;
+        }
+        
+        // Get workflow execution engine instance
+        const { getWorkflowExecutionEngine } = require("./engines/workflowExecutionEngineInstance");
+        const workflowExecutionEngine = getWorkflowExecutionEngine();
+        
+        // Proceed with WebSocket upgrade for workflow execution
+        wss.handleUpgrade(request, socket, head, (ws) => {
+          getWorkflowExecutionEngine().registerProgressClient(executionId, ws);
+          
+          ws.on('message', (message) => {
+            try {
+              const parsed = JSON.parse(message.toString());
+              if (parsed.type === 'ping') {
+                ws.send(JSON.stringify({ type: 'pong' }));
+              }
+            } catch (error) {
+              console.error('Invalid WebSocket message:', error);
+            }
+          });
+          
+          ws.on('close', () => {
+            console.log(`WebSocket client disconnected from workflow execution ${executionId}`);
+          });
+          
+          ws.send(JSON.stringify({ 
+            type: 'connected',
+            executionId,
+            message: 'Connected to workflow execution progress updates'
+          }));
+        });
+        
+      } catch (error) {
+        console.error('WebSocket workflow execution error:', error);
+        socket.write('HTTP/1.1 500 Internal Server Error\r\n\r\n');
+        socket.destroy();
+      }
+      return;
     }
     // Handle embedded chatbot WebSocket connections
     else if (pathname?.startsWith("/ws/chatbot/")) {

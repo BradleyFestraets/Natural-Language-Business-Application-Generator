@@ -499,7 +499,7 @@ Generate enhanced requirements that integrate the clarification responses to imp
                 name: { type: "string" },
                 type: { type: "string", enum: ["core", "support", "governance", "integration"] },
                 description: { type: "string" },
-                complexity: { type: "string", enum: ["low", "medium", "high"] },
+                complexity: { type: "string", enum: ["simple", "medium", "complex"] },
                 dependencies: { type: "array", items: { type: "string" } }
               }
             },

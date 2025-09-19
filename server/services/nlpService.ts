@@ -600,7 +600,7 @@ Focus on enterprise-grade applications with Fortune 500 standards for security, 
                 name: { type: "string", description: "Process name" },
                 type: { type: "string", enum: ["core", "support", "governance", "integration"], description: "Process type" },
                 description: { type: "string", description: "Detailed process description" },
-                complexity: { type: "string", enum: ["low", "medium", "high"], description: "Process complexity" },
+                complexity: { type: "string", enum: ["simple", "medium", "complex"], description: "Process complexity" },
                 dependencies: { type: "array", items: { type: "string" }, description: "Process dependencies" }
               },
               required: ["name", "type", "description", "complexity"]
