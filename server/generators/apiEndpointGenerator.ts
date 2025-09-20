@@ -11,7 +11,21 @@ export interface ApiGenerationOptions {
   authRequired?: boolean;
 }
 
-export class ApiEndpointGenerator {
+export interface GeneratedAPI {
+  endpoint: string;
+  method: string;
+  code: string;
+  path: string;
+  validation?: string;
+}
+
+export interface DatabaseSchema {
+  tableName: string;
+  columns: Record<string, any>;
+  relations?: Record<string, any>;
+}
+
+export class APIEndpointGenerator {
   private openai: OpenAI;
 
   constructor() {
@@ -318,6 +332,95 @@ Generated middleware should be production-ready and secure.`;
       .split(/[_\-\s]+/)
       .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
       .join('');
+  }
+
+  /**
+   * Method to match ApplicationOrchestrator expectations
+   */
+  async generateAPIs(
+    requirement: BusinessRequirement,
+    schemas: DatabaseSchema[]
+  ): Promise<GeneratedAPI[]> {
+    const apis: GeneratedAPI[] = [];
+
+    try {
+      // Generate CRUD endpoints for each schema
+      for (const schema of schemas) {
+        const entityName = schema.tableName;
+        const crudCode = await this.generateCrudEndpoints(entityName, requirement);
+        
+        // Create API entries for each CRUD operation
+        apis.push({
+          endpoint: `/api/${entityName}`,
+          method: 'GET',
+          code: crudCode,
+          path: `server/api/${entityName}Routes.ts`,
+          validation: await this.generateValidationSchemas(requirement)
+        });
+        apis.push({
+          endpoint: `/api/${entityName}`,
+          method: 'POST',
+          code: crudCode,
+          path: `server/api/${entityName}Routes.ts`,
+          validation: await this.generateValidationSchemas(requirement)
+        });
+        apis.push({
+          endpoint: `/api/${entityName}/:id`,
+          method: 'PUT',
+          code: crudCode,
+          path: `server/api/${entityName}Routes.ts`,
+          validation: await this.generateValidationSchemas(requirement)
+        });
+        apis.push({
+          endpoint: `/api/${entityName}/:id`,
+          method: 'DELETE',
+          code: crudCode,
+          path: `server/api/${entityName}Routes.ts`,
+          validation: await this.generateValidationSchemas(requirement)
+        });
+      }
+
+      // Generate workflow APIs if needed
+      if (requirement.extractedEntities?.processes) {
+        const workflowCode = await this.generateWorkflowEndpoints(requirement);
+        apis.push({
+          endpoint: '/api/workflows',
+          method: 'POST',
+          code: workflowCode,
+          path: 'server/api/workflowRoutes.ts',
+          validation: await this.generateValidationSchemas(requirement)
+        });
+      }
+
+      return apis;
+    } catch (error) {
+      console.error('Error generating API endpoints:', error);
+      // Return fallback APIs
+      return this.generateFallbackAPIs(requirement);
+    }
+  }
+
+  private generateFallbackAPIs(requirement: BusinessRequirement): GeneratedAPI[] {
+    return [
+      {
+        endpoint: '/api/entities',
+        method: 'GET',
+        code: this.getFallbackMainRoutes(),
+        path: 'server/api/routes.ts'
+      },
+      {
+        endpoint: '/api/entities',
+        method: 'POST',
+        code: this.getFallbackMainRoutes(),
+        path: 'server/api/routes.ts'
+      },
+      {
+        endpoint: '/api/workflows',
+        method: 'POST',
+        code: this.getFallbackWorkflowEndpoints(),
+        path: 'server/api/workflowRoutes.ts'
+      }
+    ];
   }
 
   /**

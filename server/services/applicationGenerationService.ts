@@ -3,7 +3,7 @@ import { isAIServiceAvailable } from "../config/validation";
 import { BusinessRequirement, GeneratedApplication } from "@shared/schema";
 import { WebSocket } from "ws";
 import { ReactComponentGenerator } from "../generators/reactComponentGenerator";
-import { ApiEndpointGenerator } from "../generators/apiEndpointGenerator";
+import { APIEndpointGenerator } from "../generators/apiEndpointGenerator";
 import { DatabaseSchemaGenerator } from "../generators/databaseSchemaGenerator";
 import { WorkflowGenerationService } from "./workflowGenerationService";
 import { WorkflowUIGenerator } from "../generators/workflowUIGenerator";
@@ -13,6 +13,7 @@ import { ApplicationDeployer } from "../deployment/applicationDeployer";
 import { storage } from "../storage";
 import { join } from "path";
 import { ImageVideoGenerationService } from "./imageVideoGenerationService";
+import { GenerationOrchestrator, GenerationStage, OrchestrationOptions } from "../orchestration/generationOrchestrator";
 
 export interface GenerationOptions {
   includeWorkflows?: boolean;
@@ -62,7 +63,7 @@ export class ApplicationGenerationService {
   private openai: OpenAI;
   private activeGenerations: Map<string, WebSocket[]> = new Map();
   private reactGenerator: ReactComponentGenerator;
-  private apiGenerator: ApiEndpointGenerator;
+  private apiGenerator: APIEndpointGenerator;
   private schemaGenerator: DatabaseSchemaGenerator;
   private workflowGenerator: WorkflowGenerationService;
   private workflowUIGenerator: WorkflowUIGenerator;
@@ -70,6 +71,7 @@ export class ApplicationGenerationService {
   private computerUseService: ComputerUseService;
   private deployer: ApplicationDeployer;
   private imageVideoService: ImageVideoGenerationService;
+  private orchestrator: GenerationOrchestrator;
 
   constructor() {
     if (process.env.OPENAI_API_KEY) {
@@ -82,7 +84,7 @@ export class ApplicationGenerationService {
 
     // Initialize concrete generators
     this.reactGenerator = new ReactComponentGenerator();
-    this.apiGenerator = new ApiEndpointGenerator();
+    this.apiGenerator = new APIEndpointGenerator();
     this.schemaGenerator = new DatabaseSchemaGenerator();
     this.workflowGenerator = new WorkflowGenerationService();
     this.workflowUIGenerator = new WorkflowUIGenerator();
@@ -90,6 +92,35 @@ export class ApplicationGenerationService {
     this.computerUseService = new ComputerUseService();
     this.deployer = new ApplicationDeployer();
     this.imageVideoService = new ImageVideoGenerationService();
+    this.orchestrator = new GenerationOrchestrator();
+    
+    // Set up progress event listener from orchestrator
+    this.orchestrator.on('progress', ({ applicationId, progress }) => {
+      this.updateProgress(applicationId, progress);
+    });
+  }
+
+  /**
+   * Register WebSocket for real-time updates
+   */
+  registerWebSocket(applicationId: string, ws: WebSocket): void {
+    if (!this.activeGenerations.has(applicationId)) {
+      this.activeGenerations.set(applicationId, []);
+    }
+    this.activeGenerations.get(applicationId)?.push(ws);
+    
+    // Also register with orchestrator for enhanced progress updates
+    this.orchestrator.registerWebSocket(applicationId, ws);
+    
+    ws.on("close", () => {
+      const sockets = this.activeGenerations.get(applicationId);
+      if (sockets) {
+        const index = sockets.indexOf(ws);
+        if (index > -1) {
+          sockets.splice(index, 1);
+        }
+      }
+    });
   }
 
   /**
@@ -102,9 +133,46 @@ export class ApplicationGenerationService {
   ): Promise<GenerationResult> {
     const startTime = Date.now();
     const applicationId = generatedApp.id;
+    
+    // Use orchestrator for enhanced generation if configured
+    const useOrchestrator = options.useOrchestrator !== false;
+
+    if (useOrchestrator) {
+      // Use the new orchestrator for coordinated generation
+      const orchestrationOptions: Partial<OrchestrationOptions> = {
+        parallel: true,
+        maxConcurrency: 3,
+        retryOnFailure: true,
+        maxRetries: 2,
+        generateTests: false,
+        generateDocumentation: true,
+        validateOutput: true,
+        deploymentTarget: "replit"
+      };
+      
+      const result = await this.orchestrator.orchestrateGeneration(
+        businessRequirement,
+        generatedApp,
+        orchestrationOptions
+      );
+      
+      return {
+        applicationId: result.applicationId,
+        success: result.success,
+        deploymentUrl: result.deploymentUrl,
+        generatedCode: result.generatedCode,
+        errors: result.errors,
+        metrics: {
+          totalDuration: result.metrics.totalDuration,
+          componentCount: result.metrics.componentCount,
+          apiEndpointCount: result.metrics.apiEndpointCount,
+          schemaTableCount: result.metrics.schemaTableCount
+        }
+      };
+    }
 
     try {
-      // Enhanced enterprise options with BMAD methodology
+      // Enhanced enterprise options with BMAD methodology (legacy path)
       const finalOptions = {
         includeWorkflows: true,
         includeForms: true,

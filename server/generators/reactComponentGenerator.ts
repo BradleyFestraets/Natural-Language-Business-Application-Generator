@@ -11,6 +11,23 @@ export interface ComponentGenerationOptions {
   componentStyle?: "functional" | "class";
 }
 
+export interface GeneratedComponent {
+  name: string;
+  type: 'page' | 'component' | 'layout' | 'form' | 'modal';
+  code: string;
+  path: string;
+  dependencies: string[];
+  props?: Record<string, any>;
+  styles?: string;
+}
+
+export interface APIEndpoint {
+  endpoint: string;
+  method: string;
+  params?: Record<string, any>;
+  response?: Record<string, any>;
+}
+
 export class ReactComponentGenerator {
   private openai: OpenAI;
 
@@ -360,6 +377,131 @@ Generated types should be complete and production-ready.`;
       .split(/[_\-\s]+/)
       .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
       .join('');
+  }
+
+  /**
+   * Method to match ApplicationOrchestrator expectations
+   */
+  async generateComponents(
+    requirement: BusinessRequirement,
+    apis: APIEndpoint[]
+  ): Promise<GeneratedComponent[]> {
+    const components: GeneratedComponent[] = [];
+
+    try {
+      // Extract UI requirements from the business requirement
+      const uiFeatures = requirement.extractedEntities?.uiRequirements || [];
+      const appName = requirement.extractedEntities?.applicationName || 'App';
+
+      // Generate main layout component
+      const layoutComponent = await this.generateLayoutComponent(appName, requirement);
+      components.push(layoutComponent);
+
+      // Generate dashboard component if needed
+      if (requirement.extractedEntities?.requiresDashboard) {
+        const dashboardComponent = await this.generateDashboardComponent(requirement, apis);
+        components.push(dashboardComponent);
+      }
+
+      // Generate form components for data input features
+      const formFeatures = uiFeatures.filter((f: any) => 
+        f.toLowerCase().includes('form') || 
+        f.toLowerCase().includes('input') ||
+        f.toLowerCase().includes('create') ||
+        f.toLowerCase().includes('edit')
+      );
+
+      for (const formFeature of formFeatures) {
+        const formComponent = await this.generateFormComponentNew(formFeature, apis, requirement);
+        if (formComponent) {
+          components.push(formComponent);
+        }
+      }
+
+      return components;
+    } catch (error) {
+      console.error('Error generating React components:', error);
+      // Return fallback components
+      return this.generateFallbackComponentsNew(requirement);
+    }
+  }
+
+  private async generateLayoutComponent(
+    appName: string,
+    requirement: BusinessRequirement
+  ): Promise<GeneratedComponent> {
+    const code = await this.generateLayout(requirement);
+    return {
+      name: 'AppLayout',
+      type: 'layout',
+      code,
+      path: 'client/src/components/AppLayout.tsx',
+      dependencies: ['wouter', '@/components/ui/button', '@/components/ui/sidebar']
+    };
+  }
+
+  private async generateDashboardComponent(
+    requirement: BusinessRequirement,
+    apis: APIEndpoint[]
+  ): Promise<GeneratedComponent> {
+    const code = await this.generateDashboard(requirement);
+    return {
+      name: 'Dashboard',
+      type: 'page',
+      code,
+      path: 'client/src/pages/Dashboard.tsx',
+      dependencies: [
+        '@/components/ui/card',
+        '@/components/ui/button',
+        '@tanstack/react-query',
+        'lucide-react'
+      ]
+    };
+  }
+
+  private async generateFormComponentNew(
+    feature: string,
+    apis: APIEndpoint[],
+    requirement: BusinessRequirement
+  ): Promise<GeneratedComponent | null> {
+    const componentName = this.capitalizeAndClean(feature) + 'Form';
+    const code = await this.generateFormComponent(feature, requirement);
+    
+    return {
+      name: componentName,
+      type: 'form',
+      code,
+      path: `client/src/components/forms/${componentName}.tsx`,
+      dependencies: [
+        'react-hook-form',
+        '@hookform/resolvers/zod',
+        'zod',
+        '@/components/ui/button',
+        '@/components/ui/input',
+        '@/components/ui/label',
+        '@/components/ui/card',
+        '@tanstack/react-query'
+      ]
+    };
+  }
+
+  private generateFallbackComponentsNew(requirement: BusinessRequirement): GeneratedComponent[] {
+    return [
+      {
+        name: 'Dashboard',
+        type: 'page',
+        code: this.getFallbackDashboard(),
+        path: 'client/src/pages/Dashboard.tsx',
+        dependencies: ['@/components/ui/card']
+      },
+      {
+        name: 'AppLayout',
+        type: 'layout',
+        code: this.getFallbackLayout(),
+        path: 'client/src/components/AppLayout.tsx',
+        dependencies: ['@/components/ui/button']
+      }
+    ];
   }
 
   /**

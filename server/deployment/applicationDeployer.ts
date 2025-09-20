@@ -2,7 +2,7 @@ import { mkdir, writeFile, readFile, rm } from "fs/promises";
 import { join, dirname } from "path";
 import { spawn } from "child_process";
 import { ReactComponentGenerator } from "../generators/reactComponentGenerator";
-import { ApiEndpointGenerator } from "../generators/apiEndpointGenerator";
+import { APIEndpointGenerator } from "../generators/apiEndpointGenerator";
 import { DatabaseSchemaGenerator } from "../generators/databaseSchemaGenerator";
 import { BusinessRequirement, GeneratedApplication } from "@shared/schema";
 import { storage } from "../storage";
@@ -60,12 +60,12 @@ export interface DeploymentResult {
 
 export class ApplicationDeployer {
   private reactGenerator: ReactComponentGenerator;
-  private apiGenerator: ApiEndpointGenerator;
+  private apiGenerator: APIEndpointGenerator;
   private schemaGenerator: DatabaseSchemaGenerator;
 
   constructor() {
     this.reactGenerator = new ReactComponentGenerator();
-    this.apiGenerator = new ApiEndpointGenerator();
+    this.apiGenerator = new APIEndpointGenerator();
     this.schemaGenerator = new DatabaseSchemaGenerator();
   }
 
@@ -473,6 +473,37 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   }
 
   /**
+   * Generate unique application URL based on ID and environment
+   */
+  private generateUniqueUrl(
+    applicationId: string,
+    environment: string,
+    customDomain?: string
+  ): string {
+    // Create a unique identifier based on application ID and timestamp
+    const timestamp = Date.now().toString(36);
+    const shortId = applicationId.substring(0, 8).toLowerCase();
+    const uniqueId = `${shortId}-${timestamp}`;
+    
+    // Sanitize the unique ID
+    const sanitizedId = uniqueId.replace(/[^a-z0-9\-]/g, '').substring(0, 50);
+    
+    if (customDomain && this.validateDomain(customDomain)) {
+      return `https://${customDomain}`;
+    }
+    
+    // Generate environment-specific URL
+    switch (environment) {
+      case "production":
+        return `https://${sanitizedId}.replit.app`;
+      case "staging":
+        return `https://${sanitizedId}-staging.replit.app`;
+      default:
+        return `https://${sanitizedId}-dev.replit.app`;
+    }
+  }
+
+  /**
    * Deploy to target environment with security controls
    */
   private async deployToEnvironment(
@@ -497,24 +528,12 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     // 5. Start the application with resource limits
     // 6. Run comprehensive health checks
 
-    // Generate secure deployment URL
-    let deploymentUrl: string;
-
-    switch (options.targetEnvironment) {
-      case "production":
-        // Only allow custom domains for production if properly validated
-        if (options.customDomain && this.validateDomain(options.customDomain)) {
-          deploymentUrl = `https://${options.customDomain}`;
-        } else {
-          deploymentUrl = `https://${sanitizedAppId}.replit.app`;
-        }
-        break;
-      case "staging":
-        deploymentUrl = `https://${sanitizedAppId}-staging.replit.app`;
-        break;
-      default:
-        deploymentUrl = `https://${sanitizedAppId}-dev.replit.app`;
-    }
+    // Generate unique deployment URL
+    const deploymentUrl = this.generateUniqueUrl(
+      applicationId,
+      options.targetEnvironment,
+      options.customDomain
+    );
 
     // Simulate deployment with timeout for SLA compliance
     const deploymentTimeout = new Promise((_, reject) =>
@@ -679,9 +698,12 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         updatedAt: new Date()
       };
 
-      // Simulate updating deploymentUrl based on status
+      // Generate unique URL when deployment completes
       if (status === "completed" && progress === 100) {
-        const deploymentUrl = `https://${applicationId.toLowerCase()}.replit.app`; // Placeholder URL
+        const deploymentUrl = this.generateUniqueUrl(
+          applicationId,
+          "production"
+        );
         updates['deploymentUrl'] = deploymentUrl;
       }
 

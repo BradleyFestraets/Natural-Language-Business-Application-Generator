@@ -11,6 +11,14 @@ export interface SchemaGenerationOptions {
   databaseType?: "postgresql" | "mysql" | "sqlite";
 }
 
+export interface GeneratedSchema {
+  tableName: string;
+  code: string;
+  path: string;
+  columns: Record<string, any>;
+  relations?: Record<string, any>;
+}
+
 export class DatabaseSchemaGenerator {
   private openai: OpenAI;
 
@@ -308,6 +316,122 @@ Generated helpers should be production-ready and efficient.`;
       console.error("Failed to generate query helpers:", error);
       return this.getFallbackQueryHelpers();
     }
+  }
+
+  /**
+   * Method to match ApplicationOrchestrator expectations
+   */
+  async generateSchemas(
+    requirement: BusinessRequirement
+  ): Promise<GeneratedSchema[]> {
+    const schemas: GeneratedSchema[] = [];
+
+    try {
+      // Generate main schema
+      const mainSchemaCode = await this.generateMainSchema(requirement, { 
+        outputDir: './generated',
+        databaseType: 'postgresql' 
+      });
+      
+      schemas.push({
+        tableName: 'users',
+        code: mainSchemaCode,
+        path: 'server/db/schema.ts',
+        columns: {
+          id: 'varchar',
+          email: 'varchar',
+          name: 'varchar',
+          role: 'varchar',
+          createdAt: 'timestamp',
+          updatedAt: 'timestamp'
+        }
+      });
+
+      // Generate schemas for business entities
+      if (requirement.extractedEntities?.forms) {
+        for (const entityName of requirement.extractedEntities.forms) {
+          const entitySchema = await this.generateEntitySchema(entityName, requirement);
+          const safeEntityName = this.capitalizeAndClean(entityName).toLowerCase();
+          
+          schemas.push({
+            tableName: `${safeEntityName}s`,
+            code: entitySchema,
+            path: `server/db/${safeEntityName}Schema.ts`,
+            columns: {
+              id: 'varchar',
+              name: 'varchar',
+              description: 'text',
+              status: 'varchar',
+              ownerId: 'varchar',
+              createdAt: 'timestamp',
+              updatedAt: 'timestamp'
+            },
+            relations: {
+              owner: 'users'
+            }
+          });
+        }
+      }
+
+      // Generate workflow schemas if needed
+      if (requirement.extractedEntities?.processes) {
+        const workflowSchemaCode = await this.generateWorkflowSchema(requirement);
+        schemas.push({
+          tableName: 'workflows',
+          code: workflowSchemaCode,
+          path: 'server/db/workflowSchema.ts',
+          columns: {
+            id: 'varchar',
+            name: 'varchar',
+            status: 'varchar',
+            currentStep: 'varchar',
+            createdAt: 'timestamp',
+            updatedAt: 'timestamp'
+          }
+        });
+      }
+
+      return schemas;
+    } catch (error) {
+      console.error('Error generating database schemas:', error);
+      // Return fallback schemas
+      return this.generateFallbackSchemas();
+    }
+  }
+
+  private generateFallbackSchemas(): GeneratedSchema[] {
+    return [
+      {
+        tableName: 'users',
+        code: this.getFallbackMainSchema(),
+        path: 'server/db/schema.ts',
+        columns: {
+          id: 'varchar',
+          email: 'varchar',
+          name: 'varchar',
+          role: 'varchar',
+          createdAt: 'timestamp',
+          updatedAt: 'timestamp'
+        }
+      },
+      {
+        tableName: 'business_entities',
+        code: this.getFallbackMainSchema(),
+        path: 'server/db/schema.ts',
+        columns: {
+          id: 'varchar',
+          name: 'varchar',
+          description: 'text',
+          status: 'varchar',
+          ownerId: 'varchar',
+          createdAt: 'timestamp',
+          updatedAt: 'timestamp'
+        },
+        relations: {
+          owner: 'users'
+        }
+      }
+    ];
   }
 
   /**

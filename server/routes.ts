@@ -116,6 +116,15 @@ export async function registerRoutes(
   const computerUseService = new ComputerUseService();
   const imageVideoService = new ImageVideoGenerationService();
 
+  // ===== GENERATION PROGRESS ENDPOINT =====
+  
+  // WebSocket endpoint for generation progress
+  app.get('/api/generation/ws-token/:applicationId', isAuthenticated, requireOrganization(), (req: Request, res: Response) => {
+    const { applicationId } = req.params;
+    const token = generateWsToken('generation-progress', applicationId, req.sessionID || '');
+    res.json({ token, endpoint: `/ws/generation-progress/${applicationId}` });
+  });
+  
   // ===== NLP ENDPOINTS =====
   
   // Parse business description with streaming support
@@ -2144,7 +2153,8 @@ export async function registerRoutes(
 
         // Proceed with WebSocket upgrade if authenticated and authorized
         wss.handleUpgrade(request, socket, head, (ws) => {
-          applicationGenerationService.registerProgressClient(applicationId, ws);
+          // Register WebSocket for real-time generation progress
+          applicationGenerationService.registerWebSocket(applicationId, ws);
 
           ws.on('message', (message) => {
             try {
