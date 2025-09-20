@@ -18,6 +18,7 @@ import { TelephonyService } from "./telephonyService";
 import { CRMService } from "./crmService";
 import { SalesAutomationService } from "./salesAutomationService";
 import { MarketingAutomationService } from "./marketingAutomationService";
+import { CustomerSupportService } from "./customerSupportService";
 import { GenerationOrchestrator, GenerationStage, OrchestrationOptions } from "../orchestration/generationOrchestrator";
 
 export interface GenerationOptions {
@@ -30,6 +31,7 @@ export interface GenerationOptions {
   includeCRM?: boolean;
   includeSalesAutomation?: boolean;
   includeMarketingAutomation?: boolean;
+  includeCustomerSupport?: boolean;
   deploymentTarget?: "replit" | "local";
   generateDocumentation?: boolean;
 }
@@ -56,6 +58,7 @@ export interface GeneratedCode {
   crm: { [filename: string]: string };
   sales: { [filename: string]: string };
   marketing: { [filename: string]: string };
+  support: { [filename: string]: string };
   documentation: { [filename: string]: string };
   visualAssets?: any; // Placeholder for visual assets
 }
@@ -91,6 +94,7 @@ export class ApplicationGenerationService {
   private crmService: CRMService;
   private salesAutomationService: SalesAutomationService;
   private marketingAutomationService: MarketingAutomationService;
+  private customerSupportService: CustomerSupportService;
   private orchestrator: GenerationOrchestrator;
 
   constructor() {
@@ -117,6 +121,7 @@ export class ApplicationGenerationService {
     this.crmService = new CRMService();
     this.salesAutomationService = new SalesAutomationService();
     this.marketingAutomationService = new MarketingAutomationService();
+    this.customerSupportService = new CustomerSupportService();
     this.orchestrator = new GenerationOrchestrator();
     
     // Set up progress event listener from orchestrator
@@ -208,6 +213,7 @@ export class ApplicationGenerationService {
         includeCRM: true,
         includeSalesAutomation: true,
         includeMarketingAutomation: true,
+        includeCustomerSupport: true,
         deploymentTarget: "replit" as const,
         generateDocumentation: true,
         ...options,
@@ -2361,6 +2367,563 @@ Create dynamic customer segments using rule-based conditions:
         }
       }
 
+      // Phase 7.10: Generate Customer Support components if requested
+      let support: { [filename: string]: string } = {};
+      if (finalOptions.includeCustomerSupport) {
+        this.updateProgress(applicationId, {
+          stage: "integrating",
+          progress: 95,
+          message: "Generating Customer Support system...",
+          currentComponent: "Support & Customer Success",
+          estimatedTimeRemaining: 120
+        });
+
+        try {
+          // Generate customer support configuration
+          support["supportConfig.ts"] = `export const supportConfiguration = {
+            features: {
+              intelligentTicketing: true,
+              aiRouting: true,
+              knowledgeBase: true,
+              customerHealth: true,
+              proactiveSupport: true,
+              analytics: true
+            },
+            settings: {
+              defaultResponseTime: 2 * 60, // 2 hours in minutes
+              escalationThreshold: 24 * 60, // 24 hours
+              satisfactionSurveyEnabled: true,
+              autoAcknowledgmentEnabled: true,
+              slaEnabled: true
+            },
+            channels: {
+              email: { enabled: true, priority: 'high' },
+              chat: { enabled: true, priority: 'high' },
+              phone: { enabled: true, priority: 'medium' },
+              application: { enabled: true, priority: 'high' },
+              portal: { enabled: true, priority: 'medium' }
+            },
+            sla: {
+              low: { response: 24 * 60, resolution: 7 * 24 * 60 },
+              medium: { response: 8 * 60, resolution: 3 * 24 * 60 },
+              high: { response: 2 * 60, resolution: 24 * 60 },
+              urgent: { response: 30, resolution: 4 * 60 }
+            }
+          };
+
+          export interface SupportFeatures {
+            intelligentTicketing: boolean;
+            aiRouting: boolean;
+            knowledgeBase: boolean;
+            customerHealth: boolean;
+            proactiveSupport: boolean;
+            analytics: boolean;
+          }
+          `;
+
+          support["supportService.ts"] = `import { supportConfiguration } from './supportConfig';
+
+          class SupportService {
+            private baseUrl: string;
+
+            constructor() {
+              this.baseUrl = process.env.API_BASE_URL || '/api';
+            }
+
+            async createTicket(ticketData: any) {
+              const response = await fetch(\`\${this.baseUrl}/support/tickets\`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(ticketData)
+              });
+              return response.json();
+            }
+
+            async getTicket(ticketId: string) {
+              const response = await fetch(\`\${this.baseUrl}/support/tickets/\${ticketId}\`);
+              return response.json();
+            }
+
+            async updateTicket(ticketId: string, updates: any) {
+              const response = await fetch(\`\${this.baseUrl}/support/tickets/\${ticketId}\`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updates)
+              });
+              return response.json();
+            }
+
+            async addTicketInteraction(ticketId: string, interaction: any) {
+              const response = await fetch(\`\${this.baseUrl}/support/tickets/\${ticketId}/interactions\`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(interaction)
+              });
+              return response.json();
+            }
+
+            async searchKnowledgeBase(query: string) {
+              const response = await fetch(\`\${this.baseUrl}/support/knowledge/search?query=\${encodeURIComponent(query)}\`);
+              return response.json();
+            }
+
+            async getCustomerHealth(customerId: string) {
+              const response = await fetch(\`\${this.baseUrl}/support/customer-health/\${customerId}\`);
+              return response.json();
+            }
+
+            async getSupportAnalytics(startDate: string, endDate: string) {
+              const response = await fetch(\`\${this.baseUrl}/support/analytics?startDate=\${startDate}&endDate=\${endDate}\`);
+              return response.json();
+            }
+          }
+
+          export const supportService = new SupportService();
+          export default supportService;
+          `;
+
+          support["supportComponents.tsx"] = `import React, { useState, useEffect } from 'react';
+          import { Button } from '@/components/ui/button';
+          import { Input } from '@/components/ui/input';
+          import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+          import { Badge } from '@/components/ui/badge';
+          import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+          import {
+            MessageSquare,
+            Users,
+            BarChart3,
+            Brain,
+            Plus,
+            AlertCircle,
+            CheckCircle,
+            Clock,
+            TrendingUp,
+            HeadphonesIcon
+          } from 'lucide-react';
+
+          interface SupportTicket {
+            id: string;
+            ticketNumber: string;
+            title: string;
+            status: 'open' | 'in_progress' | 'resolved' | 'closed';
+            priority: 'low' | 'medium' | 'high' | 'urgent';
+            customerInfo: { name: string; company?: string };
+            assignedAgent?: string;
+            createdAt: string;
+            slaBreached?: boolean;
+          }
+
+          interface SupportComponentsProps {
+            className?: string;
+          }
+
+          export function SupportComponents({ className = '' }: SupportComponentsProps) {
+            const [tickets, setTickets] = useState<SupportTicket[]>([]);
+            const [isLoading, setIsLoading] = useState(false);
+
+            useEffect(() => {
+              loadTickets();
+            }, []);
+
+            const loadTickets = async () => {
+              setIsLoading(true);
+              try {
+                const response = await fetch('/api/support/tickets');
+                const data = await response.json();
+                setTickets(data.tickets || []);
+              } catch (error) {
+                console.error('Failed to load tickets:', error);
+              } finally {
+                setIsLoading(false);
+              }
+            };
+
+            const getStatusColor = (status: SupportTicket['status']) => {
+              switch (status) {
+                case 'open': return 'text-blue-600 bg-blue-100';
+                case 'in_progress': return 'text-yellow-600 bg-yellow-100';
+                case 'resolved': return 'text-green-600 bg-green-100';
+                case 'closed': return 'text-gray-600 bg-gray-100';
+                default: return 'text-gray-600 bg-gray-100';
+              }
+            };
+
+            const getPriorityIcon = (priority: SupportTicket['priority']) => {
+              switch (priority) {
+                case 'urgent': return <AlertCircle className="h-4 w-4 text-red-500" />;
+                case 'high': return <AlertCircle className="h-4 w-4 text-orange-500" />;
+                case 'medium': return <Clock className="h-4 w-4 text-yellow-500" />;
+                case 'low': return <CheckCircle className="h-4 w-4 text-green-500" />;
+                default: return <Clock className="h-4 w-4" />;
+              }
+            };
+
+            const getPriorityColor = (priority: SupportTicket['priority']) => {
+              switch (priority) {
+                case 'urgent': return 'border-red-500 bg-red-50';
+                case 'high': return 'border-orange-500 bg-orange-50';
+                case 'medium': return 'border-yellow-500 bg-yellow-50';
+                case 'low': return 'border-green-500 bg-green-50';
+                default: return 'border-gray-500 bg-gray-50';
+              }
+            };
+
+            return (
+              <div className={\`space-y-6 \${className}\}>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-2xl font-bold tracking-tight">Customer Support</h2>
+                    <p className="text-muted-foreground">Intelligent ticket management and customer success</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline">
+                      <Brain className="h-4 w-4 mr-2" />
+                      Knowledge Base
+                    </Button>
+                    <Button>
+                      <Plus className="h-4 w-4 mr-2" />
+                      New Ticket
+                    </Button>
+                  </div>
+                </div>
+
+                <Tabs defaultValue="tickets" className="space-y-4">
+                  <TabsList>
+                    <TabsTrigger value="tickets">Support Tickets</TabsTrigger>
+                    <TabsTrigger value="knowledge">Knowledge Base</TabsTrigger>
+                    <TabsTrigger value="health">Customer Health</TabsTrigger>
+                    <TabsTrigger value="analytics">Analytics</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="tickets" className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {tickets.map((ticket) => (
+                        <Card key={ticket.id} className={\`hover:shadow-md transition-shadow \${ticket.slaBreached ? 'border-red-500 bg-red-50' : getPriorityColor(ticket.priority)}\`}>
+                          <CardHeader className="pb-3">
+                            <div className="flex justify-between items-start">
+                              <div className="flex items-center gap-2">
+                                {getPriorityIcon(ticket.priority)}
+                                <CardTitle className="text-lg">{ticket.ticketNumber}</CardTitle>
+                              </div>
+                              <Badge className={getStatusColor(ticket.status)} variant="secondary">
+                                <span className="capitalize">{ticket.status}</span>
+                              </Badge>
+                            </div>
+                            <CardDescription>{ticket.title}</CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-2">
+                              <div className="flex justify-between text-sm">
+                                <span className="text-muted-foreground">Customer:</span>
+                                <span className="font-medium">{ticket.customerInfo.name}</span>
+                              </div>
+                              <div className="flex justify-between text-sm">
+                                <span className="text-muted-foreground">Agent:</span>
+                                <span>{ticket.assignedAgent || 'Unassigned'}</span>
+                              </div>
+                              <div className="flex justify-between text-sm">
+                                <span className="text-muted-foreground">Created:</span>
+                                <span>{new Date(ticket.createdAt).toLocaleDateString()}</span>
+                              </div>
+                              {ticket.customerInfo.company && (
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-muted-foreground">Company:</span>
+                                  <span>{ticket.customerInfo.company}</span>
+                                </div>
+                              )}
+                              {ticket.slaBreached && (
+                                <div className="flex items-center gap-1 text-red-600 text-sm mt-2">
+                                  <AlertCircle className="h-3 w-3" />
+                                  <span>SLA Breached</span>
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex gap-2 mt-4">
+                              <Button variant="outline" size="sm" className="flex-1">
+                                View
+                              </Button>
+                              <Button variant="outline" size="sm" className="flex-1">
+                                Reply
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+
+                    {tickets.length === 0 && !isLoading && (
+                      <Card>
+                        <CardContent className="flex flex-col items-center justify-center py-12">
+                          <HeadphonesIcon className="h-12 w-12 text-muted-foreground mb-4" />
+                          <h3 className="text-lg font-semibold mb-2">No support tickets</h3>
+                          <p className="text-muted-foreground text-center mb-4">
+                            All customer support tickets will appear here
+                          </p>
+                          <Button>
+                            <Plus className="h-4 w-4 mr-2" />
+                            Create Ticket
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="knowledge">
+                    <Card>
+                      <CardContent className="flex flex-col items-center justify-center py-12">
+                        <Brain className="h-12 w-12 text-muted-foreground mb-4" />
+                        <h3 className="text-lg font-semibold mb-2">AI-Powered Knowledge Base</h3>
+                        <p className="text-muted-foreground text-center mb-4">
+                          Search and manage support knowledge with AI assistance
+                        </p>
+                        <div className="flex gap-2">
+                          <Input placeholder="Search knowledge base..." className="w-80" />
+                          <Button>
+                            Search
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+
+                  <TabsContent value="health">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                          <CardTitle className="text-sm font-medium">Customer Health</CardTitle>
+                          <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">94%</div>
+                          <p className="text-xs text-muted-foreground">+5% from last month</p>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                          <CardTitle className="text-sm font-medium">Active Tickets</CardTitle>
+                          <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">23</div>
+                          <p className="text-xs text-muted-foreground">-8 from last week</p>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                          <CardTitle className="text-sm font-medium">Avg Resolution</CardTitle>
+                          <Clock className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">2.4h</div>
+                          <p className="text-xs text-muted-foreground">-0.3h from last week</p>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                          <CardTitle className="text-sm font-medium">Satisfaction</CardTitle>
+                          <Users className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">4.7/5</div>
+                          <p className="text-xs text-muted-foreground">+0.2 from last month</p>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="analytics">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                          <CardTitle className="text-sm font-medium">First Contact Resolution</CardTitle>
+                          <CheckCircle className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">68%</div>
+                          <p className="text-xs text-muted-foreground">+12% from last month</p>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                          <CardTitle className="text-sm font-medium">SLA Compliance</CardTitle>
+                          <BarChart3 className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">94%</div>
+                          <p className="text-xs text-muted-foreground">+3% from last month</p>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                          <CardTitle className="text-sm font-medium">Agent Productivity</CardTitle>
+                          <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">87%</div>
+                          <p className="text-xs text-muted-foreground">+5% from last month</p>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </div>
+            );
+          }
+          `;
+
+          support["supportIntegration.md"] = \`# Customer Support Integration Guide
+
+          ## Overview
+          This application includes comprehensive customer support with intelligent ticket management, AI-powered resolution assistance, and proactive customer health monitoring that integrates seamlessly with CRM, applications, and business operations.
+
+          ## Features
+          - **Intelligent Ticket Management**: AI-powered routing, SLA tracking, and multi-channel support
+          - **AI-Powered Resolution**: Automated suggestions, knowledge base integration, and smart assistance
+          - **Customer Health Monitoring**: Predictive analytics, proactive intervention, and success management
+          - **Support Analytics**: Performance tracking, optimization recommendations, and ROI analysis
+          - **Multi-Channel Support**: Email, chat, phone, application, and customer portal integration
+          - **Knowledge Management**: Dynamic content generation, intelligent search, and self-service tools
+
+          ## Configuration
+          1. Customer support is automatically integrated into generated applications
+          2. Configure SLA settings and escalation rules in \`supportConfig.ts\`
+          3. Set up support channels and routing preferences
+          4. Define knowledge base categories and AI assistance settings
+          5. Configure customer health scoring parameters and intervention workflows
+
+          ## Usage Examples
+
+          ### Creating a Support Ticket
+          \`\`\`tsx
+          import { supportService } from './supportService';
+
+          const ticket = await supportService.createTicket({
+            title: 'Unable to access dashboard',
+            description: 'Customer cannot login to the application dashboard after recent update',
+            customerId: 'customer-123',
+            customerInfo: {
+              name: 'John Smith',
+              email: 'john.smith@example.com',
+              company: 'Tech Corp'
+            },
+            channel: 'application',
+            priority: 'high',
+            category: 'technical',
+            tags: ['login', 'dashboard', 'urgent']
+          });
+          \`\`\`
+
+          ### Adding Ticket Interaction
+          \`\`\`tsx
+          await supportService.addTicketInteraction(ticket.id, {
+            type: 'agent_reply',
+            content: 'I understand the issue. Let me help you resolve this.',
+            author: 'Agent Smith',
+            authorType: 'agent',
+            isPrivate: false
+          });
+          \`\`\`
+
+          ### Searching Knowledge Base
+          \`\`\`tsx
+          const articles = await supportService.searchKnowledgeBase('login dashboard issue');
+          \`\`\`
+
+          ### Getting Customer Health
+          \`\`\`tsx
+          const health = await supportService.getCustomerHealth('customer-123');
+          console.log('Health Score:', health.overallScore);
+          console.log('Risk Factors:', health.riskFactors);
+          console.log('Next Best Action:', health.predictiveAnalytics.nextBestAction);
+          \`\`\`
+
+          ## API Endpoints
+          - \`POST /api/support/tickets\` - Create support ticket
+          - \`GET /api/support/tickets/:id\` - Get ticket details
+          - \`PUT /api/support/tickets/:id\` - Update ticket
+          - \`POST /api/support/tickets/:id/interactions\` - Add ticket interaction
+          - \`GET /api/support/knowledge/search\` - Search knowledge base
+          - \`GET /api/support/customer-health/:customerId\` - Get customer health
+          - \`GET /api/support/analytics\` - Get support analytics
+
+          ## Ticket Management Features
+          - **AI-Powered Routing**: Intelligent agent assignment based on expertise and workload
+          - **SLA Management**: Automated escalation and breach detection with notifications
+          - **Multi-Channel Support**: Unified ticket creation from email, chat, phone, and applications
+          - **Customer Context**: Complete customer profile integration with interaction history
+          - **Priority Assessment**: AI-powered priority scoring based on content and customer value
+
+          ## Knowledge Base Features
+          - **Dynamic Content**: AI-generated articles from support resolutions and application documentation
+          - **Intelligent Search**: Relevance scoring with context-aware suggestions
+          - **Self-Service Portal**: Customer-facing knowledge base with guided troubleshooting
+          - **Analytics Integration**: Usage tracking and effectiveness measurement
+          - **Community Features**: Customer collaboration and peer support capabilities
+
+          ## Customer Health Monitoring
+          - **Health Scoring**: Comprehensive customer health assessment using multiple data sources
+          - **Risk Detection**: Early identification of at-risk customers with automated alerts
+          - **Proactive Intervention**: Automated outreach workflows for customer success management
+          - **Predictive Analytics**: Churn prediction and expansion opportunity identification
+          - **Success Tracking**: Onboarding progress, feature adoption, and engagement monitoring
+
+          ## Support Analytics
+          - **Performance Metrics**: Resolution times, satisfaction scores, and productivity tracking
+          - **Trend Analysis**: Volume trends, category analysis, and performance optimization
+          - **Agent Analytics**: Individual and team performance with productivity insights
+          - **Customer Insights**: Support-driven customer intelligence and success patterns
+          - **ROI Analysis**: Support cost analysis and customer retention impact measurement
+
+          ## Integration Points
+          - **CRM Integration**: Customer context, interaction history, and lifecycle management
+          - **Application Integration**: Usage analytics for health scoring and contextual support
+          - **Business Intelligence**: Support metrics contribution to unified business dashboard
+          - **Communication Channels**: Email, chat, phone, and customer portal integration
+          - **External Systems**: Help desk software migration and third-party tool connections
+
+          ## AI Capabilities
+          - **Intelligent Routing**: Machine learning-based ticket assignment and priority assessment
+          - **Resolution Assistance**: AI-powered suggestions based on historical data and knowledge base
+          - **Content Generation**: Automated knowledge base creation and response assistance
+          - **Predictive Analytics**: Customer health prediction and intervention recommendations
+          - **Sentiment Analysis**: Customer satisfaction monitoring and escalation triggers
+
+          ## Security & Compliance
+          - **Data Protection**: Customer support data encryption and privacy controls
+          - **Access Management**: Role-based permissions for support agents and administrators
+          - **Audit Logging**: Complete audit trail for all support interactions and changes
+          - **Compliance Features**: GDPR, HIPAA, and industry-specific compliance support
+          - **Data Retention**: Configurable data retention policies and archival management
+
+          ## Performance Considerations
+          - **Real-time Processing**: Instant ticket routing and SLA monitoring
+          - **Scalable Architecture**: Support for high-volume ticket processing
+          - **Fast Search**: Sub-second knowledge base search with intelligent relevance
+          - **Background Processing**: Automated workflows and health monitoring
+          - **Caching Optimization**: Performance optimization for frequently accessed data
+
+          This customer support system transforms traditional reactive support into proactive customer success management, providing comprehensive tools for support teams while ensuring exceptional customer experiences and business value.
+          \`;
+
+          this.updateProgress(applicationId, {
+            stage: "integrating",
+            progress: 96,
+            message: "Customer Support system generated successfully",
+            estimatedTimeRemaining: 115
+          });
+
+        } catch (error) {
+          console.error("Failed to generate Customer Support components:", error);
+          this.updateProgress(applicationId, {
+            stage: "integrating",
+            progress: 96,
+            message: "Customer Support generation failed, continuing without support features",
+            errors: [error instanceof Error ? error.message : "Unknown customer support error"],
+            estimatedTimeRemaining: 115
+          });
+        }
+      }
+
       // Phase 8: Generate integrations if requested
       let integrations: { [filename: string]: string } = {};
       if (finalOptions.includeIntegrations) {
@@ -2370,7 +2933,7 @@ Create dynamic customer segments using rule-based conditions:
       this.updateProgress(applicationId, {
         stage: "integrating",
         progress: 89,
-        message: "Integrating components, workflows, chatbots, voice AI, telephony, CRM, sales automation, and marketing...",
+        message: "Integrating components, workflows, chatbots, voice AI, telephony, CRM, sales automation, marketing, and customer support...",
         estimatedTimeRemaining: 150
       });
 
@@ -2401,6 +2964,7 @@ Create dynamic customer segments using rule-based conditions:
           crm,
           sales,
           marketing,
+          support,
           documentation: {}
         });
       }
@@ -2426,6 +2990,7 @@ Create dynamic customer segments using rule-based conditions:
         crm,
         sales,
         marketing,
+        support,
         documentation
       });
 

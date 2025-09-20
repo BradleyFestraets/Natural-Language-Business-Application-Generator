@@ -3485,6 +3485,147 @@ export async function registerRoutes(
     }
   });
 
+  // ===== Customer Support Endpoints =====
+  // Support ticket management endpoints
+  app.post("/api/support/tickets", async (req, res) => {
+    try {
+      const ticketData = req.body;
+
+      if (!ticketData.title || !ticketData.description || !ticketData.customerId || !ticketData.customerInfo) {
+        return res.status(400).json({
+          error: "Missing required fields: title, description, customerId, customerInfo"
+        });
+      }
+
+      const ticket = await customerSupportService.createTicket(ticketData);
+
+      res.json(ticket);
+    } catch (error) {
+      console.error("Create support ticket error:", error);
+      res.status(500).json({
+        error: "Failed to create support ticket",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.get("/api/support/tickets/:ticketId", async (req, res) => {
+    try {
+      const { ticketId } = req.params;
+
+      // In real implementation, would fetch from database
+      const tickets = Array.from((customerSupportService as any).tickets.values());
+      const ticket = tickets.find((t: any) => t.id === ticketId);
+
+      if (!ticket) {
+        return res.status(404).json({ error: "Ticket not found" });
+      }
+
+      res.json(ticket);
+    } catch (error) {
+      console.error("Get support ticket error:", error);
+      res.status(500).json({
+        error: "Failed to get support ticket",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.put("/api/support/tickets/:ticketId", async (req, res) => {
+    try {
+      const { ticketId } = req.params;
+      const updates = req.body;
+
+      const updatedTicket = await customerSupportService.updateTicketStatus(ticketId, updates);
+
+      res.json(updatedTicket);
+    } catch (error) {
+      console.error("Update support ticket error:", error);
+      res.status(500).json({
+        error: "Failed to update support ticket",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.post("/api/support/tickets/:ticketId/interactions", async (req, res) => {
+    try {
+      const { ticketId } = req.params;
+      const interaction = req.body;
+
+      if (!interaction.type || !interaction.content || !interaction.author || !interaction.authorType) {
+        return res.status(400).json({
+          error: "Missing required fields: type, content, author, authorType"
+        });
+      }
+
+      const updatedTicket = await customerSupportService.addTicketInteraction(ticketId, interaction);
+
+      res.json(updatedTicket);
+    } catch (error) {
+      console.error("Add ticket interaction error:", error);
+      res.status(500).json({
+        error: "Failed to add ticket interaction",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.get("/api/support/knowledge/search", async (req, res) => {
+    try {
+      const { query } = req.query;
+
+      if (!query) {
+        return res.status(400).json({ error: "Query parameter is required" });
+      }
+
+      const articles = await customerSupportService.searchKnowledgeBase(query as string);
+
+      res.json({ articles });
+    } catch (error) {
+      console.error("Search knowledge base error:", error);
+      res.status(500).json({
+        error: "Failed to search knowledge base",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.get("/api/support/customer-health/:customerId", async (req, res) => {
+    try {
+      const { customerId } = req.params;
+
+      const health = await customerSupportService.calculateCustomerHealth(customerId);
+
+      res.json(health);
+    } catch (error) {
+      console.error("Get customer health error:", error);
+      res.status(500).json({
+        error: "Failed to get customer health",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.get("/api/support/analytics", async (req, res) => {
+    try {
+      const { startDate, endDate } = req.query;
+
+      const start = startDate ? new Date(startDate as string) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const end = endDate ? new Date(endDate as string) : new Date();
+
+      const analytics = await customerSupportService.getSupportAnalytics(start, end);
+
+      res.json(analytics);
+    } catch (error) {
+      console.error("Get support analytics error:", error);
+      res.status(500).json({
+        error: "Failed to get support analytics",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
   return httpServer;
 }
 
