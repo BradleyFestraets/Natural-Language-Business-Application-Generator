@@ -19,6 +19,7 @@ import { CRMService } from "./crmService";
 import { SalesAutomationService } from "./salesAutomationService";
 import { MarketingAutomationService } from "./marketingAutomationService";
 import { CustomerSupportService } from "./customerSupportService";
+import { BusinessIntelligenceService } from "./businessIntelligenceService";
 import { GenerationOrchestrator, GenerationStage, OrchestrationOptions } from "../orchestration/generationOrchestrator";
 
 export interface GenerationOptions {
@@ -32,6 +33,7 @@ export interface GenerationOptions {
   includeSalesAutomation?: boolean;
   includeMarketingAutomation?: boolean;
   includeCustomerSupport?: boolean;
+  includeBusinessIntelligence?: boolean;
   deploymentTarget?: "replit" | "local";
   generateDocumentation?: boolean;
 }
@@ -59,6 +61,7 @@ export interface GeneratedCode {
   sales: { [filename: string]: string };
   marketing: { [filename: string]: string };
   support: { [filename: string]: string };
+  analytics: { [filename: string]: string };
   documentation: { [filename: string]: string };
   visualAssets?: any; // Placeholder for visual assets
 }
@@ -95,6 +98,7 @@ export class ApplicationGenerationService {
   private salesAutomationService: SalesAutomationService;
   private marketingAutomationService: MarketingAutomationService;
   private customerSupportService: CustomerSupportService;
+  private businessIntelligenceService: BusinessIntelligenceService;
   private orchestrator: GenerationOrchestrator;
 
   constructor() {
@@ -122,6 +126,7 @@ export class ApplicationGenerationService {
     this.salesAutomationService = new SalesAutomationService();
     this.marketingAutomationService = new MarketingAutomationService();
     this.customerSupportService = new CustomerSupportService();
+    this.businessIntelligenceService = new BusinessIntelligenceService();
     this.orchestrator = new GenerationOrchestrator();
     
     // Set up progress event listener from orchestrator
@@ -214,6 +219,7 @@ export class ApplicationGenerationService {
         includeSalesAutomation: true,
         includeMarketingAutomation: true,
         includeCustomerSupport: true,
+        includeBusinessIntelligence: true,
         deploymentTarget: "replit" as const,
         generateDocumentation: true,
         ...options,
@@ -2924,6 +2930,685 @@ Create dynamic customer segments using rule-based conditions:
         }
       }
 
+      // Phase 7.11: Generate Business Intelligence components if requested
+      let analytics: { [filename: string]: string } = {};
+      if (finalOptions.includeBusinessIntelligence) {
+        this.updateProgress(applicationId, {
+          stage: "integrating",
+          progress: 97,
+          message: "Generating Business Intelligence system...",
+          currentComponent: "Analytics & Insights",
+          estimatedTimeRemaining: 110
+        });
+
+        try {
+          // Generate business intelligence configuration
+          analytics["analyticsConfig.ts"] = `export const analyticsConfiguration = {
+            features: {
+              unifiedAnalytics: true,
+              naturalLanguageQueries: true,
+              predictiveAnalytics: true,
+              aiInsights: true,
+              realTimeDashboards: true,
+              crossSystemAnalytics: true
+            },
+            settings: {
+              realTimeUpdates: true,
+              updateFrequency: 30, // seconds
+              retentionPeriod: 365, // days
+              maxConcurrentUsers: 1000,
+              queryTimeout: 5000 // milliseconds
+            },
+            integrations: {
+              dataSources: ['crm', 'sales', 'marketing', 'support', 'applications'],
+              externalConnections: ['tableau', 'power_bi', 'snowflake', 'bigquery'],
+              realTimeStreams: ['websocket', 'sse', 'kafka']
+            },
+            ai: {
+              naturalLanguageProcessing: true,
+              predictiveModeling: true,
+              patternRecognition: true,
+              recommendationEngine: true,
+              anomalyDetection: true
+            }
+          };
+
+          export interface AnalyticsFeatures {
+            unifiedAnalytics: boolean;
+            naturalLanguageQueries: boolean;
+            predictiveAnalytics: boolean;
+            aiInsights: boolean;
+            realTimeDashboards: boolean;
+            crossSystemAnalytics: boolean;
+          }
+          `;
+
+          analytics["analyticsService.ts"] = `import { analyticsConfiguration } from './analyticsConfig';
+
+          class AnalyticsService {
+            private baseUrl: string;
+
+            constructor() {
+              this.baseUrl = process.env.API_BASE_URL || '/api';
+            }
+
+            async getUnifiedAnalytics(timeRange: any) {
+              const response = await fetch(\`\${this.baseUrl}/analytics/unified\`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ timeRange })
+              });
+              return response.json();
+            }
+
+            async processNaturalLanguageQuery(query: string) {
+              const response = await fetch(\`\${this.baseUrl}/analytics/query\`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query })
+              });
+              return response.json();
+            }
+
+            async createDashboard(dashboardData: any) {
+              const response = await fetch(\`\${this.baseUrl}/analytics/dashboards\`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(dashboardData)
+              });
+              return response.json();
+            }
+
+            async getDashboard(dashboardId: string) {
+              const response = await fetch(\`\${this.baseUrl}/analytics/dashboards/\${dashboardId}\`);
+              return response.json();
+            }
+
+            async getAIPredictions() {
+              const response = await fetch(\`\${this.baseUrl}/analytics/predictions\`);
+              return response.json();
+            }
+
+            async getOptimizationRecommendations() {
+              const response = await fetch(\`\${this.baseUrl}/analytics/recommendations\`);
+              return response.json();
+            }
+
+            async getBusinessInsights() {
+              const response = await fetch(\`\${this.baseUrl}/analytics/insights\`);
+              return response.json();
+            }
+
+            async getTrendAnalysis(metric: string, period: string) {
+              const response = await fetch(\`\${this.baseUrl}/analytics/trends?metric=\${metric}&period=\${period}\`);
+              return response.json();
+            }
+
+            async getPerformanceMetrics() {
+              const response = await fetch(\`\${this.baseUrl}/analytics/performance\`);
+              return response.json();
+            }
+
+            async exportAnalytics(format: string, data: any) {
+              const response = await fetch(\`\${this.baseUrl}/analytics/export?format=\${format}\`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+              });
+              return response.json();
+            }
+          }
+
+          export const analyticsService = new AnalyticsService();
+          export default analyticsService;
+          `;
+
+          analytics["analyticsComponents.tsx"] = `import React, { useState, useEffect } from 'react';
+          import { Button } from '@/components/ui/button';
+          import { Input } from '@/components/ui/input';
+          import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+          import { Badge } from '@/components/ui/badge';
+          import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+          import {
+            BarChart3,
+            TrendingUp,
+            Brain,
+            Search,
+            Plus,
+            Download,
+            RefreshCw,
+            Target,
+            DollarSign,
+            Users,
+            Activity,
+            AlertTriangle,
+            CheckCircle
+          } from 'lucide-react';
+
+          interface BusinessMetric {
+            id: string;
+            name: string;
+            value: number;
+            change: number;
+            changePercent: number;
+            trend: 'up' | 'down' | 'stable';
+            target: number;
+            status: 'on_track' | 'behind' | 'exceeded';
+          }
+
+          interface AnalyticsComponentsProps {
+            className?: string;
+          }
+
+          export function AnalyticsComponents({ className = '' }: AnalyticsComponentsProps) {
+            const [metrics, setMetrics] = useState<BusinessMetric[]>([]);
+            const [isLoading, setIsLoading] = useState(false);
+            const [query, setQuery] = useState('');
+            const [queryResults, setQueryResults] = useState<any>(null);
+
+            useEffect(() => {
+              loadMetrics();
+            }, []);
+
+            const loadMetrics = async () => {
+              setIsLoading(true);
+              try {
+                const response = await fetch('/api/analytics/performance');
+                const data = await response.json();
+                setMetrics(data.metrics || []);
+              } catch (error) {
+                console.error('Failed to load metrics:', error);
+              } finally {
+                setIsLoading(false);
+              }
+            };
+
+            const handleQuery = async () => {
+              if (!query.trim()) return;
+
+              try {
+                const response = await fetch('/api/analytics/query', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ query })
+                });
+                const data = await response.json();
+                setQueryResults(data);
+              } catch (error) {
+                console.error('Failed to process query:', error);
+              }
+            };
+
+            const getMetricIcon = (name: string) => {
+              switch (name.toLowerCase()) {
+                case 'revenue': return <DollarSign className="h-4 w-4" />;
+                case 'customers': return <Users className="h-4 w-4" />;
+                case 'leads': return <Target className="h-4 w-4" />;
+                case 'conversion': return <TrendingUp className="h-4 w-4" />;
+                default: return <BarChart3 className="h-4 w-4" />;
+              }
+            };
+
+            const getStatusColor = (status: BusinessMetric['status']) => {
+              switch (status) {
+                case 'on_track': return 'text-green-600 bg-green-100';
+                case 'behind': return 'text-red-600 bg-red-100';
+                case 'exceeded': return 'text-blue-600 bg-blue-100';
+                default: return 'text-gray-600 bg-gray-100';
+              }
+            };
+
+            const getTrendIcon = (trend: BusinessMetric['trend']) => {
+              switch (trend) {
+                case 'up': return <TrendingUp className="h-3 w-3 text-green-500" />;
+                case 'down': return <TrendingUp className="h-3 w-3 text-red-500 transform rotate-180" />;
+                case 'stable': return <Activity className="h-3 w-3 text-gray-500" />;
+                default: return <Activity className="h-3 w-3" />;
+              }
+            };
+
+            return (
+              <div className={\`space-y-6 \${className}\}>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-2xl font-bold tracking-tight">Business Intelligence</h2>
+                    <p className="text-muted-foreground">Unified analytics and AI-powered insights</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" onClick={loadMetrics}>
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Refresh
+                    </Button>
+                    <Button>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create Dashboard
+                    </Button>
+                  </div>
+                </div>
+
+                <Tabs defaultValue="metrics" className="space-y-4">
+                  <TabsList>
+                    <TabsTrigger value="metrics">Key Metrics</TabsTrigger>
+                    <TabsTrigger value="query">Natural Language Query</TabsTrigger>
+                    <TabsTrigger value="insights">AI Insights</TabsTrigger>
+                    <TabsTrigger value="predictions">Predictions</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="metrics" className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      {metrics.map((metric) => (
+                        <Card key={metric.id} className="hover:shadow-md transition-shadow">
+                          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium flex items-center gap-2">
+                              {getMetricIcon(metric.name)}
+                              {metric.name}
+                            </CardTitle>
+                            <Badge className={getStatusColor(metric.status)} variant="secondary">
+                              <span className="capitalize">{metric.status.replace('_', ' ')}</span>
+                            </Badge>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="text-2xl font-bold">{metric.value.toLocaleString()}</div>
+                            <div className="flex items-center gap-1 mt-1">
+                              {getTrendIcon(metric.trend)}
+                              <span className={\`text-xs \${metric.changePercent >= 0 ? 'text-green-600' : 'text-red-600'}\`}>
+                                {metric.changePercent >= 0 ? '+' : ''}{metric.changePercent.toFixed(1)}%
+                              </span>
+                              <span className="text-xs text-muted-foreground">vs last period</span>
+                            </div>
+                            <div className="flex justify-between text-xs text-muted-foreground mt-2">
+                              <span>Target: {metric.target.toLocaleString()}</span>
+                              <span>{((metric.value / metric.target) * 100).toFixed(0)}%</span>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Revenue Overview</CardTitle>
+                        <CardDescription>Real-time revenue analytics across all business systems</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-green-600">$125,000</div>
+                            <div className="text-sm text-muted-foreground">Total Revenue</div>
+                            <div className="text-xs text-green-600 mt-1">+15.3% vs last month</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-blue-600">1,250</div>
+                            <div className="text-sm text-muted-foreground">Total Customers</div>
+                            <div className="text-xs text-blue-600 mt-1">+6.8% vs last month</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-purple-600">3.2x</div>
+                            <div className="text-sm text-muted-foreground">Marketing ROI</div>
+                            <div className="text-xs text-purple-600 mt-1">+0.5x vs last month</div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+
+                  <TabsContent value="query">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Natural Language Analytics</CardTitle>
+                        <CardDescription>Ask questions about your business data in plain English</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="flex gap-2">
+                          <Input
+                            placeholder="Ask me anything about your business data..."
+                            value={query}
+                            onChange={(e) => setQuery(e.target.value)}
+                            onKeyPress={(e) => e.key === 'Enter' && handleQuery()}
+                            className="flex-1"
+                          />
+                          <Button onClick={handleQuery}>
+                            <Search className="h-4 w-4 mr-2" />
+                            Query
+                          </Button>
+                        </div>
+
+                        {queryResults && (
+                          <div className="space-y-4">
+                            <div className="p-4 bg-muted rounded-lg">
+                              <h4 className="font-semibold mb-2">Query Results</h4>
+                              <p className="text-sm text-muted-foreground">
+                                {queryResults.insights?.join(', ') || 'Analysis complete'}
+                              </p>
+                            </div>
+
+                            {queryResults.visualizations && queryResults.visualizations.length > 0 && (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {queryResults.visualizations.map((viz: any, index: number) => (
+                                  <Card key={index}>
+                                    <CardHeader>
+                                      <CardTitle className="text-sm">{viz.title}</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                      <div className="h-32 bg-muted rounded flex items-center justify-center">
+                                        <BarChart3 className="h-8 w-8 text-muted-foreground" />
+                                      </div>
+                                    </CardContent>
+                                  </Card>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+
+                  <TabsContent value="insights">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                          <CardTitle className="text-sm font-medium">AI Insights</CardTitle>
+                          <Brain className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">24</div>
+                          <p className="text-xs text-muted-foreground">Active insights this month</p>
+                          <div className="mt-2 space-y-1">
+                            <div className="flex items-center gap-2 text-sm">
+                              <CheckCircle className="h-3 w-3 text-green-500" />
+                              <span>Revenue growth opportunity</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-sm">
+                              <AlertTriangle className="h-3 w-3 text-yellow-500" />
+                              <span>Customer churn risk detected</span>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                          <CardTitle className="text-sm font-medium">Optimization Opportunities</CardTitle>
+                          <Target className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">8</div>
+                          <p className="text-xs text-muted-foreground">Available optimizations</p>
+                          <div className="mt-2 space-y-1">
+                            <div className="flex items-center gap-2 text-sm">
+                              <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                              <span>Sales process enhancement</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-sm">
+                              <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                              <span>Marketing campaign optimization</span>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="predictions">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                          <CardTitle className="text-sm font-medium">Revenue Forecast</CardTitle>
+                          <DollarSign className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold text-green-600">$145,000</div>
+                          <p className="text-xs text-muted-foreground">Next quarter projection</p>
+                          <div className="text-xs text-green-600 mt-1">+16% growth expected</div>
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                          <CardTitle className="text-sm font-medium">Customer Churn</CardTitle>
+                          <Users className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold text-yellow-600">32</div>
+                          <p className="text-xs text-muted-foreground">Predicted next month</p>
+                          <div className="text-xs text-yellow-600 mt-1">2.6% churn rate</div>
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                          <CardTitle className="text-sm font-medium">Campaign Performance</CardTitle>
+                          <Target className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold text-blue-600">3.8x</div>
+                          <p className="text-xs text-muted-foreground">Expected ROI</p>
+                          <div className="text-xs text-blue-600 mt-1">+0.6x improvement</div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </div>
+            );
+          }
+          `;
+
+          analytics["analyticsIntegration.md"] = \`# Business Intelligence Integration Guide
+
+          ## Overview
+          This application includes comprehensive unified business intelligence with real-time analytics across all business operations, AI-powered insights and predictive analytics, custom reporting with natural language queries, and cross-system KPI monitoring that provides complete business visibility and optimization recommendations.
+
+          ## Features
+          - **Unified Analytics Dashboard**: Real-time business intelligence across applications, sales, marketing, and support operations
+          - **Natural Language Query Engine**: Conversational interface for business intelligence ("Show me Q4 performance by customer segment")
+          - **AI-Powered Business Insights**: Automated pattern recognition, trend analysis, and optimization recommendations
+          - **Predictive Analytics**: Sales forecasting, customer churn prediction, and marketing ROI optimization
+          - **Cross-System Performance Monitoring**: Unified KPI tracking with automated alerting and performance optimization
+          - **Custom Dashboard Creation**: Role-based dashboards with customizable widgets and real-time data
+
+          ## Configuration
+          1. Business intelligence is automatically integrated into generated applications
+          2. Configure data sources and refresh intervals in \`analyticsConfig.ts\`
+          3. Set up KPI definitions and thresholds for performance monitoring
+          4. Define natural language processing settings for query understanding
+          5. Configure predictive analytics models and AI insights parameters
+          6. Set up automated reporting schedules and alert triggers
+
+          ## Usage Examples
+
+          ### Getting Unified Analytics
+          \`\`\`tsx
+          import { analyticsService } from './analyticsService';
+
+          const analytics = await analyticsService.getUnifiedAnalytics({
+            start: new Date('2024-12-01'),
+            end: new Date('2024-12-31'),
+            period: 'month'
+          });
+
+          console.log('Business Metrics:', analytics.businessMetrics);
+          console.log('AI Insights:', analytics.aiInsights);
+          console.log('Predictions:', analytics.predictions);
+          \`\`\`
+
+          ### Natural Language Query Processing
+          \`\`\`tsx
+          const queryResult = await analyticsService.processNaturalLanguageQuery(
+            'Show me revenue trends for Q4 by customer segment'
+          );
+
+          console.log('Query Interpretation:', queryResult.interpreted);
+          console.log('Results:', queryResult.results);
+          console.log('Visualizations:', queryResult.visualizations);
+          \`\`\`
+
+          ### Creating Custom Dashboard
+          \`\`\`tsx
+          const dashboard = await analyticsService.createDashboard({
+            name: 'Executive Overview',
+            type: 'executive',
+            widgets: [
+              {
+                id: 'revenue_metric',
+                type: 'metric',
+                title: 'Total Revenue',
+                dataSource: 'sales',
+                configuration: {
+                  metrics: ['revenue'],
+                  dimensions: ['time_period'],
+                  visualization: { type: 'metric' }
+                },
+                position: { x: 0, y: 0 },
+                size: { width: 2, height: 1 }
+              }
+            ],
+            layout: {
+              columns: 4,
+              rows: 3,
+              responsive: true,
+              breakpoints: { mobile: { minWidth: 0, maxWidth: 768, columns: 2 } }
+            },
+            filters: [],
+            permissions: [
+              {
+                role: 'executive',
+                permissions: ['read', 'write', 'share']
+              }
+            ]
+          });
+          \`\`\`
+
+          ### Getting AI Predictions
+          \`\`\`tsx
+          const predictions = await analyticsService.getAIPredictions();
+          predictions.forEach(prediction => {
+            console.log(\`\${prediction.type}: \${prediction.prediction} (\${prediction.confidence * 100}% confidence)\`);
+          });
+          \`\`\`
+
+          ### Getting Optimization Recommendations
+          \`\`\`tsx
+          const recommendations = await analyticsService.getOptimizationRecommendations();
+          recommendations.forEach(rec => {
+            console.log(\`\${rec.title} - \${rec.type} - Impact: \${rec.impact} - Value: \$\${rec.expectedValue}\`);
+          });
+          \`\`\`
+
+          ## API Endpoints
+          - \`POST /api/analytics/unified\` - Get unified business analytics
+          - \`POST /api/analytics/query\` - Process natural language queries
+          - \`POST /api/analytics/dashboards\` - Create custom dashboards
+          - \`GET /api/analytics/dashboards/:id\` - Get dashboard with real-time data
+          - \`GET /api/analytics/predictions\` - Get AI-powered predictions
+          - \`GET /api/analytics/recommendations\` - Get optimization recommendations
+          - \`GET /api/analytics/insights\` - Get AI-generated business insights
+          - \`GET /api/analytics/trends\` - Get trend analysis for specific metrics
+          - \`GET /api/analytics/performance\` - Get performance metrics and KPIs
+          - \`POST /api/analytics/export\` - Export analytics data in various formats
+
+          ## Analytics Features
+
+          ### Unified Business Metrics
+          - **Revenue Analytics**: Total revenue, growth rates, projections, and source attribution
+          - **Customer Analytics**: Customer counts, health scores, acquisition costs, and lifetime value
+          - **Operational Analytics**: Efficiency metrics, cost reduction, automation rates, and resource utilization
+          - **Marketing Analytics**: ROI tracking, lead conversion, campaign performance, and channel attribution
+          - **Sales Analytics**: Pipeline value, conversion rates, deal sizes, sales cycles, and quota attainment
+          - **Support Analytics**: Resolution times, satisfaction scores, SLA compliance, and cost per ticket
+          - **Application Analytics**: Usage patterns, performance metrics, user engagement, and feature adoption
+
+          ### AI-Powered Insights
+          - **Automated Pattern Discovery**: Unsupervised learning for identifying business trends and opportunities
+          - **Anomaly Detection**: Statistical analysis for identifying outliers and potential issues
+          - **Correlation Analysis**: Cross-system relationship identification and impact assessment
+          - **Trend Prediction**: Time series analysis with confidence intervals and forecasting
+          - **Optimization Recommendations**: Actionable suggestions with implementation guidance and expected value
+
+          ### Natural Language Query Engine
+          - **Intent Recognition**: AI-powered understanding of user queries and business context
+          - **Entity Extraction**: Automatic identification of metrics, dimensions, and filters from natural language
+          - **Time Range Interpretation**: Intelligent parsing of time references and period comparisons
+          - **Query Execution**: Optimized data retrieval based on interpreted query requirements
+          - **Result Visualization**: Automatic generation of appropriate charts and visualizations
+          - **Follow-up Suggestions**: Contextual recommendations for related queries and deeper analysis
+
+          ### Predictive Analytics
+          - **Revenue Forecasting**: Machine learning models for accurate revenue prediction and planning
+          - **Customer Churn Prediction**: Risk modeling with retention strategy recommendations
+          - **Market Demand Prediction**: Demand forecasting with seasonality and trend analysis
+          - **Operational Efficiency Prediction**: Process optimization and resource planning insights
+          - **Campaign Performance Prediction**: Marketing ROI forecasting and budget optimization
+          - **Business Scenario Modeling**: What-if analysis for strategic planning and decision support
+
+          ### Real-Time Analytics
+          - **Live Data Processing**: Streaming analytics with sub-30-second update latency
+          - **Event-Driven Insights**: Automated insight generation from business events and changes
+          - **Dynamic Dashboards**: Self-adapting dashboards that update based on user behavior
+          - **Intelligent Alerting**: Context-aware notifications with actionable recommendations
+          - **Performance Monitoring**: Continuous KPI tracking with anomaly detection and alerting
+
+          ## Integration Points
+          - **CRM Integration**: Customer data, sales pipeline, relationship analytics, and opportunity tracking
+          - **Sales Integration**: Revenue tracking, conversion analytics, performance metrics, and forecasting
+          - **Marketing Integration**: Campaign performance, attribution modeling, ROI analysis, and optimization
+          - **Support Integration**: Customer health, resolution analytics, satisfaction tracking, and service quality
+          - **Application Integration**: Usage analytics, performance metrics, user behavior, and feature adoption
+          - **External Tools Integration**: Tableau, Power BI, Snowflake, BigQuery, and other analytics platforms
+
+          ## Advanced Features
+
+          ### Collaborative Analytics
+          - **Shared Dashboards**: Team collaboration with role-based permissions and real-time updates
+          - **Annotated Insights**: Contextual comments, business context, and collaborative analysis
+          - **Scheduled Reports**: Automated report generation, distribution, and scheduling
+          - **Mobile Analytics**: Responsive design supporting all analytics features on mobile devices
+          - **Export Capabilities**: Multiple format support (PDF, Excel, CSV, PowerPoint) for data sharing
+
+          ### Industry-Specific Analytics
+          - **Business Process KPIs**: Industry-standard metrics and benchmarks with comparative analysis
+          - **Competitive Analysis**: Market positioning insights and competitive intelligence
+          - **Regulatory Reporting**: Automated compliance reporting and regulatory requirement tracking
+          - **Custom Metrics**: Business-specific KPI definition, tracking, and optimization
+          - **Benchmarking Tools**: Industry comparison, performance standards, and best practice identification
+
+          ### Security & Compliance
+          - **Data Governance**: Role-based access control, data classification, and audit logging
+          - **Privacy Protection**: GDPR compliance, data anonymization, and consent management
+          - **Access Management**: Granular permissions for analytics access and data visibility
+          - **Audit Trail**: Complete logging of data access, queries, and analysis activities
+          - **Compliance Reporting**: Automated compliance monitoring and regulatory reporting
+
+          ## Performance Considerations
+          - **Query Optimization**: Intelligent query processing with caching and performance optimization
+          - **Scalable Architecture**: Auto-scaling analytics engine based on data volume and user load
+          - **Real-Time Processing**: Event streaming and live data processing for instant insights
+          - **Caching Strategy**: Multi-level caching for frequently accessed data and queries
+          - **Resource Management**: Dynamic resource allocation based on usage patterns and demand
+
+          This business intelligence system provides comprehensive visibility across all business operations with AI-powered insights, natural language queries, and automated optimization recommendations that drive continuous business improvement and strategic decision-making.
+          \`;
+
+          this.updateProgress(applicationId, {
+            stage: "integrating",
+            progress: 98,
+            message: "Business Intelligence system generated successfully",
+            estimatedTimeRemaining: 105
+          });
+
+        } catch (error) {
+          console.error("Failed to generate Business Intelligence components:", error);
+          this.updateProgress(applicationId, {
+            stage: "integrating",
+            progress: 98,
+            message: "Business Intelligence generation failed, continuing without analytics features",
+            errors: [error instanceof Error ? error.message : "Unknown business intelligence error"],
+            estimatedTimeRemaining: 105
+          });
+        }
+      }
+
       // Phase 8: Generate integrations if requested
       let integrations: { [filename: string]: string } = {};
       if (finalOptions.includeIntegrations) {
@@ -2933,7 +3618,7 @@ Create dynamic customer segments using rule-based conditions:
       this.updateProgress(applicationId, {
         stage: "integrating",
         progress: 89,
-        message: "Integrating components, workflows, chatbots, voice AI, telephony, CRM, sales automation, marketing, and customer support...",
+        message: "Integrating components, workflows, chatbots, voice AI, telephony, CRM, sales automation, marketing, customer support, and business intelligence...",
         estimatedTimeRemaining: 150
       });
 
@@ -2965,6 +3650,7 @@ Create dynamic customer segments using rule-based conditions:
           sales,
           marketing,
           support,
+          analytics,
           documentation: {}
         });
       }
@@ -2991,6 +3677,7 @@ Create dynamic customer segments using rule-based conditions:
         sales,
         marketing,
         support,
+        analytics,
         documentation
       });
 
