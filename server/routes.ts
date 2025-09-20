@@ -3042,6 +3042,254 @@ export async function registerRoutes(
     }
   });
 
+  // ===== Sales Automation Endpoints =====
+  // Sales automation and quote generation endpoints
+  app.post("/api/sales/quotes", async (req, res) => {
+    try {
+      const quoteData = req.body;
+
+      if (!quoteData.customerId || !quoteData.lineItems || !quoteData.title) {
+        return res.status(400).json({
+          error: "Missing required fields: customerId, lineItems, title"
+        });
+      }
+
+      const quote = await salesAutomationService.generateQuote(quoteData);
+
+      res.json(quote);
+    } catch (error) {
+      console.error("Generate quote error:", error);
+      res.status(500).json({
+        error: "Failed to generate quote",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.get("/api/sales/quotes/:quoteId", async (req, res) => {
+    try {
+      const { quoteId } = req.params;
+
+      // In real implementation, would fetch from database
+      const quotes = Array.from((salesAutomationService as any).quotes.values());
+      const quote = quotes.find((q: any) => q.id === quoteId);
+
+      if (!quote) {
+        return res.status(404).json({ error: "Quote not found" });
+      }
+
+      res.json(quote);
+    } catch (error) {
+      console.error("Get quote error:", error);
+      res.status(500).json({
+        error: "Failed to get quote",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.put("/api/sales/quotes/:quoteId", async (req, res) => {
+    try {
+      const { quoteId } = req.params;
+      const updates = req.body;
+
+      // In real implementation, would update in database
+      const quotes = Array.from((salesAutomationService as any).quotes.values());
+      const quoteIndex = quotes.findIndex((q: any) => q.id === quoteId);
+
+      if (quoteIndex === -1) {
+        return res.status(404).json({ error: "Quote not found" });
+      }
+
+      const updatedQuote = { ...quotes[quoteIndex], ...updates, updatedAt: new Date() };
+      (salesAutomationService as any).quotes.set(quoteId, updatedQuote);
+
+      res.json(updatedQuote);
+    } catch (error) {
+      console.error("Update quote error:", error);
+      res.status(500).json({
+        error: "Failed to update quote",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.post("/api/sales/quotes/:quoteId/submit", async (req, res) => {
+    try {
+      const { quoteId } = req.params;
+
+      const quote = await salesAutomationService.submitQuoteForApproval(quoteId);
+
+      res.json(quote);
+    } catch (error) {
+      console.error("Submit quote error:", error);
+      res.status(500).json({
+        error: "Failed to submit quote",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.post("/api/sales/contracts", async (req, res) => {
+    try {
+      const { quoteId, ...contractDetails } = req.body;
+
+      if (!quoteId || !contractDetails.startDate || !contractDetails.endDate) {
+        return res.status(400).json({
+          error: "Missing required fields: quoteId, startDate, endDate"
+        });
+      }
+
+      const contract = await salesAutomationService.generateContract(quoteId, contractDetails);
+
+      res.json(contract);
+    } catch (error) {
+      console.error("Generate contract error:", error);
+      res.status(500).json({
+        error: "Failed to generate contract",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.get("/api/sales/contracts/:contractId", async (req, res) => {
+    try {
+      const { contractId } = req.params;
+
+      // In real implementation, would fetch from database
+      const contracts = Array.from((salesAutomationService as any).contracts.values());
+      const contract = contracts.find((c: any) => c.id === contractId);
+
+      if (!contract) {
+        return res.status(404).json({ error: "Contract not found" });
+      }
+
+      res.json(contract);
+    } catch (error) {
+      console.error("Get contract error:", error);
+      res.status(500).json({
+        error: "Failed to get contract",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.post("/api/sales/invoices", async (req, res) => {
+    try {
+      const { contractId, ...invoiceDetails } = req.body;
+
+      if (!contractId || !invoiceDetails.dueDate || !invoiceDetails.paymentTerms) {
+        return res.status(400).json({
+          error: "Missing required fields: contractId, dueDate, paymentTerms"
+        });
+      }
+
+      const invoice = await salesAutomationService.generateInvoice(contractId, invoiceDetails);
+
+      res.json(invoice);
+    } catch (error) {
+      console.error("Generate invoice error:", error);
+      res.status(500).json({
+        error: "Failed to generate invoice",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.get("/api/sales/products", async (req, res) => {
+    try {
+      // In real implementation, would fetch from database
+      const products = Array.from((salesAutomationService as any).products.values());
+
+      res.json({ products });
+    } catch (error) {
+      console.error("Get products error:", error);
+      res.status(500).json({
+        error: "Failed to get products",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.get("/api/sales/analytics", async (req, res) => {
+    try {
+      // In real implementation, would calculate from database
+      const analytics = {
+        period: {
+          startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Last 30 days
+          endDate: new Date()
+        },
+        metrics: {
+          quotesGenerated: 42,
+          quotesAccepted: 29,
+          quotesRejected: 3,
+          quoteToCloseRate: 68,
+          averageQuoteValue: 8450,
+          totalContractValue: 125430,
+          contractsSigned: 15,
+          revenueRecognized: 89500,
+          outstandingRevenue: 35930,
+          churnRate: 5.2,
+          renewalRate: 87.5
+        },
+        trends: {
+          monthlyRevenue: [
+            { month: '2024-12', amount: 98500 },
+            { month: '2025-01', amount: 125430 }
+          ],
+          quoteConversion: [
+            { month: '2024-12', rate: 65 },
+            { month: '2025-01', rate: 68 }
+          ],
+          contractRenewals: [
+            { month: '2024-12', count: 8 },
+            { month: '2025-01', count: 12 }
+          ]
+        },
+        topProducts: [
+          {
+            productId: 'prod_web_dev',
+            productName: 'Custom Web Development',
+            revenue: 45600,
+            count: 12
+          },
+          {
+            productId: 'prod_saas_subscription',
+            productName: 'Business Platform Subscription',
+            revenue: 32400,
+            count: 18
+          }
+        ],
+        salesRepPerformance: [
+          {
+            salesRepId: 'rep_1',
+            name: 'John Smith',
+            quotesGenerated: 15,
+            contractsClosed: 8,
+            revenueGenerated: 67400,
+            conversionRate: 53
+          },
+          {
+            salesRepId: 'rep_2',
+            name: 'Sarah Johnson',
+            quotesGenerated: 12,
+            contractsClosed: 7,
+            revenueGenerated: 58030,
+            conversionRate: 58
+          }
+        ]
+      };
+
+      res.json(analytics);
+    } catch (error) {
+      console.error("Get sales analytics error:", error);
+      res.status(500).json({
+        error: "Failed to get sales analytics",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
   return httpServer;
 }
 

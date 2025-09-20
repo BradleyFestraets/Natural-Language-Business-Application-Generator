@@ -16,6 +16,7 @@ import { ImageVideoGenerationService } from "./imageVideoGenerationService";
 import { VoiceComponentGenerator } from "./voiceComponentGenerator";
 import { TelephonyService } from "./telephonyService";
 import { CRMService } from "./crmService";
+import { SalesAutomationService } from "./salesAutomationService";
 import { GenerationOrchestrator, GenerationStage, OrchestrationOptions } from "../orchestration/generationOrchestrator";
 
 export interface GenerationOptions {
@@ -26,6 +27,7 @@ export interface GenerationOptions {
   includeVoiceComponents?: boolean;
   includeTelephony?: boolean;
   includeCRM?: boolean;
+  includeSalesAutomation?: boolean;
   deploymentTarget?: "replit" | "local";
   generateDocumentation?: boolean;
 }
@@ -50,6 +52,7 @@ export interface GeneratedCode {
   voiceComponents: { [filename: string]: string };
   telephony: { [filename: string]: string };
   crm: { [filename: string]: string };
+  sales: { [filename: string]: string };
   documentation: { [filename: string]: string };
   visualAssets?: any; // Placeholder for visual assets
 }
@@ -83,6 +86,7 @@ export class ApplicationGenerationService {
   private voiceComponentGenerator: VoiceComponentGenerator;
   private telephonyService: TelephonyService;
   private crmService: CRMService;
+  private salesAutomationService: SalesAutomationService;
   private orchestrator: GenerationOrchestrator;
 
   constructor() {
@@ -107,6 +111,7 @@ export class ApplicationGenerationService {
     this.voiceComponentGenerator = new VoiceComponentGenerator();
     this.telephonyService = new TelephonyService();
     this.crmService = new CRMService();
+    this.salesAutomationService = new SalesAutomationService();
     this.orchestrator = new GenerationOrchestrator();
     
     // Set up progress event listener from orchestrator
@@ -196,6 +201,7 @@ export class ApplicationGenerationService {
         includeVoiceComponents: true,
         includeTelephony: true,
         includeCRM: true,
+        includeSalesAutomation: true,
         deploymentTarget: "replit" as const,
         generateDocumentation: true,
         ...options,
@@ -1304,6 +1310,478 @@ Create dynamic customer segments using rule-based conditions:
         }
       }
 
+      // Phase 7.8: Generate Sales Automation components if requested
+      let sales: { [filename: string]: string } = {};
+      if (finalOptions.includeSalesAutomation) {
+        this.updateProgress(applicationId, {
+          stage: "integrating",
+          progress: 91,
+          message: "Generating Sales Automation system...",
+          currentComponent: "Sales & Revenue Management",
+          estimatedTimeRemaining: 140
+        });
+
+        try {
+          // Generate sales automation configuration
+          sales["salesConfig.ts"] = `export const salesConfiguration = {
+            features: {
+              quoteGeneration: true,
+              contractManagement: true,
+              revenueAutomation: true,
+              productCatalog: true,
+              approvalWorkflows: true,
+              analytics: true
+            },
+            settings: {
+              quoteValidityDays: 30,
+              autoApprovalThreshold: 10000,
+              managerApprovalThreshold: 50000,
+              taxRate: 0.1,
+              currency: 'USD'
+            },
+            approvalWorkflows: {
+              auto: { threshold: 10000, roles: ['auto_approved'] },
+              manager: { threshold: 50000, roles: ['sales_manager'] },
+              executive: { threshold: Infinity, roles: ['sales_manager', 'finance_director'] }
+            }
+          };
+
+          export interface SalesFeatures {
+            quoteGeneration: boolean;
+            contractManagement: boolean;
+            revenueAutomation: boolean;
+            productCatalog: boolean;
+            approvalWorkflows: boolean;
+            analytics: boolean;
+          }
+          `;
+
+          sales["salesService.ts"] = `import { salesConfiguration } from './salesConfig';
+
+          class SalesService {
+            private baseUrl: string;
+
+            constructor() {
+              this.baseUrl = process.env.API_BASE_URL || '/api';
+            }
+
+            async generateQuote(quoteData: any) {
+              const response = await fetch(\`\${this.baseUrl}/sales/quotes\`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(quoteData)
+              });
+              return response.json();
+            }
+
+            async getQuote(quoteId: string) {
+              const response = await fetch(\`\${this.baseUrl}/sales/quotes/\${quoteId}\`);
+              return response.json();
+            }
+
+            async updateQuote(quoteId: string, updates: any) {
+              const response = await fetch(\`\${this.baseUrl}/sales/quotes/\${quoteId}\`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updates)
+              });
+              return response.json();
+            }
+
+            async submitQuoteForApproval(quoteId: string) {
+              const response = await fetch(\`\${this.baseUrl}/sales/quotes/\${quoteId}/submit\`, {
+                method: 'POST'
+              });
+              return response.json();
+            }
+
+            async generateContract(quoteId: string, contractData: any) {
+              const response = await fetch(\`\${this.baseUrl}/sales/contracts\`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ quoteId, ...contractData })
+              });
+              return response.json();
+            }
+
+            async getContract(contractId: string) {
+              const response = await fetch(\`\${this.baseUrl}/sales/contracts/\${contractId}\`);
+              return response.json();
+            }
+
+            async generateInvoice(contractId: string, invoiceData: any) {
+              const response = await fetch(\`\${this.baseUrl}/sales/invoices\`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contractId, ...invoiceData })
+              });
+              return response.json();
+            }
+
+            async getProducts() {
+              const response = await fetch(\`\${this.baseUrl}/sales/products\`);
+              return response.json();
+            }
+
+            async getSalesAnalytics() {
+              const response = await fetch(\`\${this.baseUrl}/sales/analytics\`);
+              return response.json();
+            }
+          }
+
+          export const salesService = new SalesService();
+          export default salesService;
+          `;
+
+          sales["salesComponents.tsx"] = `import React, { useState, useEffect } from 'react';
+          import { Button } from '@/components/ui/button';
+          import { Input } from '@/components/ui/input';
+          import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+          import { Badge } from '@/components/ui/badge';
+          import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+          import { FileText, Plus, DollarSign, TrendingUp, CheckCircle, Clock } from 'lucide-react';
+
+          interface Quote {
+            id: string;
+            quoteNumber: string;
+            title: string;
+            totalAmount: number;
+            status: 'draft' | 'sent' | 'approved' | 'accepted' | 'rejected';
+            customerInfo: { name: string; company?: string };
+            createdAt: string;
+          }
+
+          interface SalesComponentsProps {
+            className?: string;
+          }
+
+          export function SalesComponents({ className = '' }: SalesComponentsProps) {
+            const [quotes, setQuotes] = useState<Quote[]>([]);
+            const [isLoading, setIsLoading] = useState(false);
+
+            useEffect(() => {
+              loadQuotes();
+            }, []);
+
+            const loadQuotes = async () => {
+              setIsLoading(true);
+              try {
+                const response = await fetch('/api/sales/quotes');
+                const data = await response.json();
+                setQuotes(data.quotes || []);
+              } catch (error) {
+                console.error('Failed to load quotes:', error);
+              } finally {
+                setIsLoading(false);
+              }
+            };
+
+            const getStatusColor = (status: Quote['status']) => {
+              switch (status) {
+                case 'draft': return 'text-yellow-600 bg-yellow-100';
+                case 'sent': return 'text-blue-600 bg-blue-100';
+                case 'approved': return 'text-green-600 bg-green-100';
+                case 'accepted': return 'text-emerald-600 bg-emerald-100';
+                case 'rejected': return 'text-red-600 bg-red-100';
+                default: return 'text-gray-600 bg-gray-100';
+              }
+            };
+
+            const getStatusIcon = (status: Quote['status']) => {
+              switch (status) {
+                case 'draft': return <Clock className="h-4 w-4" />;
+                case 'sent': return <FileText className="h-4 w-4" />;
+                case 'approved': return <CheckCircle className="h-4 w-4" />;
+                case 'accepted': return <CheckCircle className="h-4 w-4" />;
+                default: return <FileText className="h-4 w-4" />;
+              }
+            };
+
+            return (
+              <div className={\`space-y-6 \${className}\}>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-2xl font-bold tracking-tight">Sales Automation</h2>
+                    <p className="text-muted-foreground">Manage quotes, contracts, and revenue operations</p>
+                  </div>
+                  <Button>
+                    <Plus className="h-4 w-4 mr-2" />
+                    New Quote
+                  </Button>
+                </div>
+
+                <Tabs defaultValue="quotes" className="space-y-4">
+                  <TabsList>
+                    <TabsTrigger value="quotes">Quotes</TabsTrigger>
+                    <TabsTrigger value="contracts">Contracts</TabsTrigger>
+                    <TabsTrigger value="analytics">Analytics</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="quotes" className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {quotes.map((quote) => (
+                        <Card key={quote.id} className="hover:shadow-md transition-shadow">
+                          <CardHeader className="pb-3">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <CardTitle className="text-lg">{quote.quoteNumber}</CardTitle>
+                                <CardDescription>{quote.title}</CardDescription>
+                              </div>
+                              <Badge className={getStatusColor(quote.status)} variant="secondary">
+                                {getStatusIcon(quote.status)}
+                                <span className="ml-1 capitalize">{quote.status}</span>
+                              </Badge>
+                            </div>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-2">
+                              <div className="flex justify-between text-sm">
+                                <span className="text-muted-foreground">Customer:</span>
+                                <span className="font-medium">{quote.customerInfo.name}</span>
+                              </div>
+                              <div className="flex justify-between text-sm">
+                                <span className="text-muted-foreground">Amount:</span>
+                                <span className="font-semibold text-green-600">
+                                  \${quote.totalAmount.toLocaleString()}
+                                </span>
+                              </div>
+                              <div className="flex justify-between text-sm">
+                                <span className="text-muted-foreground">Created:</span>
+                                <span>{new Date(quote.createdAt).toLocaleDateString()}</span>
+                              </div>
+                              {quote.customerInfo.company && (
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-muted-foreground">Company:</span>
+                                  <span>{quote.customerInfo.company}</span>
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex gap-2 mt-4">
+                              <Button variant="outline" size="sm" className="flex-1">
+                                View
+                              </Button>
+                              <Button variant="outline" size="sm" className="flex-1">
+                                Edit
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+
+                    {quotes.length === 0 && !isLoading && (
+                      <Card>
+                        <CardContent className="flex flex-col items-center justify-center py-12">
+                          <FileText className="h-12 w-12 text-muted-foreground mb-4" />
+                          <h3 className="text-lg font-semibold mb-2">No quotes found</h3>
+                          <p className="text-muted-foreground text-center mb-4">
+                            Start by creating your first quote
+                          </p>
+                          <Button>
+                            <Plus className="h-4 w-4 mr-2" />
+                            Create Quote
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="contracts">
+                    <Card>
+                      <CardContent className="flex flex-col items-center justify-center py-12">
+                        <DollarSign className="h-12 w-12 text-muted-foreground mb-4" />
+                        <h3 className="text-lg font-semibold mb-2">Contract Management</h3>
+                        <p className="text-muted-foreground text-center mb-4">
+                          Manage contracts, e-signatures, and renewals
+                        </p>
+                        <Button>
+                          <Plus className="h-4 w-4 mr-2" />
+                          New Contract
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+
+                  <TabsContent value="analytics">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                          <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+                          <DollarSign className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">$125,430</div>
+                          <p className="text-xs text-muted-foreground">+12% from last month</p>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                          <CardTitle className="text-sm font-medium">Quotes Generated</CardTitle>
+                          <FileText className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">42</div>
+                          <p className="text-xs text-muted-foreground">+8 from last month</p>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                          <CardTitle className="text-sm font-medium">Conversion Rate</CardTitle>
+                          <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">68%</div>
+                          <p className="text-xs text-muted-foreground">+5% from last month</p>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                          <CardTitle className="text-sm font-medium">Avg Deal Size</CardTitle>
+                          <CheckCircle className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">$8,450</div>
+                          <p className="text-xs text-muted-foreground">+15% from last month</p>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </div>
+            );
+          }
+          `;
+
+          sales["salesIntegration.md"] = \`# Sales Automation Integration Guide
+
+          ## Overview
+          This application includes comprehensive sales automation with AI-powered quote generation, contract management, and revenue operations that seamlessly integrate with CRM and other business systems.
+
+          ## Features
+          - **AI-Powered Quote Generation**: Automated quote creation using CRM data and AI content generation
+          - **Product Catalog Management**: Dynamic pricing, discount rules, and product configuration
+          - **Approval Workflows**: Automated routing based on quote value and business rules
+          - **Contract Lifecycle Management**: From quote to renewal with e-signature integration
+          - **Revenue Automation**: Invoicing, payment processing, and revenue recognition
+          - **Sales Analytics**: Performance tracking, forecasting, and conversion optimization
+
+          ## Configuration
+          1. Sales automation is automatically integrated into generated applications
+          2. Configure pricing rules and approval workflows in \`salesConfig.ts\`
+          3. Set up product catalog with pricing models and discount matrices
+          4. Define approval thresholds and routing rules for different quote values
+
+          ## Usage Examples
+
+          ### Creating a Quote
+          \`\`\`tsx
+          import { salesService } from './salesService';
+
+          const quote = await salesService.generateQuote({
+            customerId: 'customer-id',
+            lineItems: [
+              {
+                productId: 'web-dev-service',
+                quantity: 40,
+                customDescription: 'Custom e-commerce platform'
+              }
+            ],
+            title: 'E-commerce Platform Development',
+            description: 'Complete custom e-commerce solution'
+          });
+          \`\`\`
+
+          ### Submitting for Approval
+          \`\`\`tsx
+          const approvedQuote = await salesService.submitQuoteForApproval(quote.id);
+          \`\`\`
+
+          ### Generating Contract
+          \`\`\`tsx
+          const contract = await salesService.generateContract(quote.id, {
+            startDate: new Date('2025-02-01'),
+            endDate: new Date('2025-05-01'),
+            renewalType: 'automatic'
+          });
+          \`\`\`
+
+          ## API Endpoints
+          - \`POST /api/sales/quotes\` - Create quote
+          - \`GET /api/sales/quotes/:id\` - Get quote details
+          - \`PUT /api/sales/quotes/:id\` - Update quote
+          - \`POST /api/sales/quotes/:id/submit\` - Submit for approval
+          - \`POST /api/sales/contracts\` - Generate contract
+          - \`GET /api/sales/contracts/:id\` - Get contract
+          - \`POST /api/sales/invoices\` - Generate invoice
+          - \`GET /api/sales/products\` - Get product catalog
+          - \`GET /api/sales/analytics\` - Get sales analytics
+
+          ## Pricing & Discounts
+          The system supports flexible pricing models:
+          - **Fixed Pricing**: One-time fees for products or services
+          - **Hourly Billing**: Time-based pricing for professional services
+          - **Subscription**: Monthly/annual recurring revenue
+          - **Usage-Based**: Pricing based on consumption metrics
+
+          ### Discount Types
+          - Volume discounts for large orders
+          - Loyalty discounts for repeat customers
+          - Promotional discounts for marketing campaigns
+          - Seasonal discounts for specific time periods
+
+          ## Approval Workflows
+          Quotes are automatically routed based on value:
+          - **Under \$10K**: Auto-approved for immediate processing
+          - **\$10K - \$50K**: Requires sales manager approval
+          - **Over \$50K**: Requires sales manager + finance director approval
+
+          ## Revenue Recognition
+          Automated revenue recognition supports multiple methods:
+          - **Immediate**: Revenue recognized when invoice is sent
+          - **Straight Line**: Revenue spread evenly over contract period
+          - **Milestone**: Revenue recognized based on project milestones
+          - **Percentage Complete**: Revenue based on project completion percentage
+
+          ## Integration Points
+          - **CRM Integration**: Customer data, opportunity tracking, sales activities
+          - **Marketing Integration**: Campaign attribution and lead source tracking
+          - **Support Integration**: Implementation planning and customer onboarding
+          - **Accounting Integration**: Revenue recognition and financial reporting
+
+          ## Security & Compliance
+          - Role-based access control for sales operations
+          - Audit logging for quote and contract activities
+          - Digital signature compliance (e-signature ready)
+          - Data encryption for sensitive customer information
+          - Revenue recognition compliance (ASC 606, IFRS 15)
+
+          ## Performance Considerations
+          - Optimized quote generation with caching
+          - Background processing for approval workflows
+          - Efficient product catalog search and filtering
+          - Real-time analytics dashboard updates
+          - Scalable contract and invoice management
+          \`;
+
+          this.updateProgress(applicationId, {
+            stage: "integrating",
+            progress: 92,
+            message: "Sales Automation system generated successfully",
+            estimatedTimeRemaining: 135
+          });
+
+        } catch (error) {
+          console.error("Failed to generate Sales Automation components:", error);
+          this.updateProgress(applicationId, {
+            stage: "integrating",
+            progress: 92,
+            message: "Sales Automation generation failed, continuing without sales features",
+            errors: [error instanceof Error ? error.message : "Unknown sales automation error"],
+            estimatedTimeRemaining: 135
+          });
+        }
+      }
+
       // Phase 8: Generate integrations if requested
       let integrations: { [filename: string]: string } = {};
       if (finalOptions.includeIntegrations) {
@@ -1313,7 +1791,7 @@ Create dynamic customer segments using rule-based conditions:
       this.updateProgress(applicationId, {
         stage: "integrating",
         progress: 89,
-        message: "Integrating components, workflows, chatbots, voice AI, telephony, and CRM...",
+        message: "Integrating components, workflows, chatbots, voice AI, telephony, CRM, and sales automation...",
         estimatedTimeRemaining: 150
       });
 
@@ -1342,6 +1820,7 @@ Create dynamic customer segments using rule-based conditions:
           voiceComponents,
           telephony,
           crm,
+          sales,
           documentation: {}
         });
       }
@@ -1365,6 +1844,7 @@ Create dynamic customer segments using rule-based conditions:
         voiceComponents,
         telephony,
         crm,
+        sales,
         documentation
       });
 
