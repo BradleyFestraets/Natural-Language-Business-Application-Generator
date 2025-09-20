@@ -93,7 +93,7 @@ export class ApplicationGenerationService {
   }
 
   /**
-   * Start complete application generation process
+   * Start complete application generation process with BMAD methodology
    */
   async generateApplication(
     businessRequirement: BusinessRequirement,
@@ -104,7 +104,7 @@ export class ApplicationGenerationService {
     const applicationId = generatedApp.id;
 
     try {
-      // Initialize default options
+      // Enhanced enterprise options with BMAD methodology
       const finalOptions = {
         includeWorkflows: true,
         includeForms: true,
@@ -112,14 +112,33 @@ export class ApplicationGenerationService {
         includeChatbots: true,
         deploymentTarget: "replit" as const,
         generateDocumentation: true,
-        ...options
+        ...options,
+        // BMAD methodology enhancements
+        bmadMethodology: {
+          useFullWorkflow: options.bmadIntegration?.useFullWorkflow !== false,
+          generatePRD: true,
+          generateArchitecture: true,
+          generateStories: true,
+          qualityGates: options.bmadIntegration?.qualityGates !== false,
+          agentCollaboration: true
+        },
+        // Enterprise features
+        enterpriseFeatures: {
+          securityFirst: true,
+          complianceReady: true,
+          auditLogging: true,
+          enterpriseAuth: !!options.enterpriseFeatures?.includeAuditLog,
+          customBranding: !!options.enterpriseFeatures?.includeBranding,
+          analytics: options.enterpriseFeatures?.includeAnalytics !== false,
+          ...options.enterpriseFeatures
+        }
       };
 
       this.updateProgress(applicationId, {
         stage: "initializing",
         progress: 0,
-        message: "Starting application generation...",
-        estimatedTimeRemaining: 900 // 15 minutes
+        message: "🚀 Starting enterprise application generation with BMAD methodology...",
+        estimatedTimeRemaining: 720 // 12 minutes with BMAD optimization
       });
 
       // Phase 1: Analyze requirements and create generation plan

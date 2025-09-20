@@ -31,6 +31,8 @@ import {
 } from "./middleware/authorizationMiddleware";
 import { ComputerUseService } from "./services/computerUseService";
 import { ImageVideoGenerationService } from "./services/imageVideoGenerationService";
+import { marketingRouter } from "./routes/marketingRoutes";
+import { enterpriseRouter } from "./routes/enterpriseRoutes";
 
 // Session typing for proper TypeScript support
 interface SessionWithPassport {
@@ -636,7 +638,7 @@ export async function registerRoutes(
     try {
       const metrics = nlpService.getServiceMetrics();
       const degradationDuration = await nlpService.getDegradationDuration();
-      
+
       res.json({
         production: {
           totalCalls: metrics.totalCalls,
