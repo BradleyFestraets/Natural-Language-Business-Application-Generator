@@ -3290,6 +3290,201 @@ export async function registerRoutes(
     }
   });
 
+  // ===== Marketing Automation Endpoints =====
+  // Marketing campaign and automation endpoints
+  app.post("/api/marketing/campaigns", async (req, res) => {
+    try {
+      const campaignData = req.body;
+
+      if (!campaignData.name || !campaignData.campaignType || !campaignData.targetAudience) {
+        return res.status(400).json({
+          error: "Missing required fields: name, campaignType, targetAudience"
+        });
+      }
+
+      const campaign = await marketingAutomationService.createCampaign(campaignData);
+
+      res.json(campaign);
+    } catch (error) {
+      console.error("Create marketing campaign error:", error);
+      res.status(500).json({
+        error: "Failed to create marketing campaign",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.get("/api/marketing/campaigns/:campaignId", async (req, res) => {
+    try {
+      const { campaignId } = req.params;
+
+      // In real implementation, would fetch from database
+      const campaigns = Array.from((marketingAutomationService as any).campaigns.values());
+      const campaign = campaigns.find((c: any) => c.id === campaignId);
+
+      if (!campaign) {
+        return res.status(404).json({ error: "Campaign not found" });
+      }
+
+      res.json(campaign);
+    } catch (error) {
+      console.error("Get marketing campaign error:", error);
+      res.status(500).json({
+        error: "Failed to get marketing campaign",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.put("/api/marketing/campaigns/:campaignId", async (req, res) => {
+    try {
+      const { campaignId } = req.params;
+      const updates = req.body;
+
+      // In real implementation, would update in database
+      const campaigns = Array.from((marketingAutomationService as any).campaigns.values());
+      const campaignIndex = campaigns.findIndex((c: any) => c.id === campaignId);
+
+      if (campaignIndex === -1) {
+        return res.status(404).json({ error: "Campaign not found" });
+      }
+
+      const updatedCampaign = { ...campaigns[campaignIndex], ...updates, updatedAt: new Date() };
+      (marketingAutomationService as any).campaigns.set(campaignId, updatedCampaign);
+
+      res.json(updatedCampaign);
+    } catch (error) {
+      console.error("Update marketing campaign error:", error);
+      res.status(500).json({
+        error: "Failed to update marketing campaign",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.post("/api/marketing/email-campaigns", async (req, res) => {
+    try {
+      const emailData = req.body;
+
+      if (!emailData.campaignId || !emailData.subject || !emailData.recipients) {
+        return res.status(400).json({
+          error: "Missing required fields: campaignId, subject, recipients"
+        });
+      }
+
+      const emailCampaign = await marketingAutomationService.createEmailCampaign(emailData);
+
+      res.json(emailCampaign);
+    } catch (error) {
+      console.error("Create email campaign error:", error);
+      res.status(500).json({
+        error: "Failed to create email campaign",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.post("/api/marketing/lead-capture", async (req, res) => {
+    try {
+      const captureData = req.body;
+
+      if (!captureData.name || !captureData.type || !captureData.configuration) {
+        return res.status(400).json({
+          error: "Missing required fields: name, type, configuration"
+        });
+      }
+
+      const leadCapture = await marketingAutomationService.createLeadCapture(captureData);
+
+      res.json(leadCapture);
+    } catch (error) {
+      console.error("Create lead capture error:", error);
+      res.status(500).json({
+        error: "Failed to create lead capture",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.post("/api/marketing/audience-segments", async (req, res) => {
+    try {
+      const segmentData = req.body;
+
+      if (!segmentData.name || !segmentData.description || !segmentData.criteria) {
+        return res.status(400).json({
+          error: "Missing required fields: name, description, criteria"
+        });
+      }
+
+      const audienceSegment = await marketingAutomationService.createAudienceSegment(segmentData);
+
+      res.json(audienceSegment);
+    } catch (error) {
+      console.error("Create audience segment error:", error);
+      res.status(500).json({
+        error: "Failed to create audience segment",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.get("/api/marketing/analytics", async (req, res) => {
+    try {
+      const { startDate, endDate } = req.query;
+
+      const start = startDate ? new Date(startDate as string) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const end = endDate ? new Date(endDate as string) : new Date();
+
+      const analytics = await marketingAutomationService.getMarketingAnalytics(start, end);
+
+      res.json(analytics);
+    } catch (error) {
+      console.error("Get marketing analytics error:", error);
+      res.status(500).json({
+        error: "Failed to get marketing analytics",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.get("/api/marketing/campaigns/:campaignId/performance", async (req, res) => {
+    try {
+      const { campaignId } = req.params;
+
+      // In real implementation, would calculate from database
+      const performance = {
+        campaignId,
+        metrics: {
+          totalSent: 15420,
+          delivered: 15234,
+          opened: 5208,
+          clicked: 1342,
+          converted: 189,
+          unsubscribed: 45,
+          bounced: 186,
+          complaints: 2
+        },
+        performance: {
+          openRate: 34.2,
+          clickRate: 8.7,
+          conversionRate: 1.2,
+          unsubscribeRate: 0.3
+        },
+        revenue: 45200,
+        roi: 3.2,
+        updatedAt: new Date()
+      };
+
+      res.json(performance);
+    } catch (error) {
+      console.error("Get campaign performance error:", error);
+      res.status(500).json({
+        error: "Failed to get campaign performance",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
   return httpServer;
 }
 
