@@ -13,6 +13,8 @@ import { ApplicationDeployer } from "../deployment/applicationDeployer";
 import { storage } from "../storage";
 import { join } from "path";
 import { ImageVideoGenerationService } from "./imageVideoGenerationService";
+import { VoiceComponentGenerator } from "./voiceComponentGenerator";
+import { TelephonyService } from "./telephonyService";
 import { GenerationOrchestrator, GenerationStage, OrchestrationOptions } from "../orchestration/generationOrchestrator";
 
 export interface GenerationOptions {
@@ -20,6 +22,8 @@ export interface GenerationOptions {
   includeForms?: boolean;
   includeIntegrations?: boolean;
   includeChatbots?: boolean;
+  includeVoiceComponents?: boolean;
+  includeTelephony?: boolean;
   deploymentTarget?: "replit" | "local";
   generateDocumentation?: boolean;
 }
@@ -41,6 +45,8 @@ export interface GeneratedCode {
   workflows: { [filename: string]: string };
   chatbots: { [filename: string]: string };
   computerUse: { [filename: string]: string };
+  voiceComponents: { [filename: string]: string };
+  telephony: { [filename: string]: string };
   documentation: { [filename: string]: string };
   visualAssets?: any; // Placeholder for visual assets
 }
@@ -71,6 +77,8 @@ export class ApplicationGenerationService {
   private computerUseService: ComputerUseService;
   private deployer: ApplicationDeployer;
   private imageVideoService: ImageVideoGenerationService;
+  private voiceComponentGenerator: VoiceComponentGenerator;
+  private telephonyService: TelephonyService;
   private orchestrator: GenerationOrchestrator;
 
   constructor() {
@@ -92,6 +100,8 @@ export class ApplicationGenerationService {
     this.computerUseService = new ComputerUseService();
     this.deployer = new ApplicationDeployer();
     this.imageVideoService = new ImageVideoGenerationService();
+    this.voiceComponentGenerator = new VoiceComponentGenerator();
+    this.telephonyService = new TelephonyService();
     this.orchestrator = new GenerationOrchestrator();
     
     // Set up progress event listener from orchestrator
@@ -178,6 +188,8 @@ export class ApplicationGenerationService {
         includeForms: true,
         includeIntegrations: true,
         includeChatbots: true,
+        includeVoiceComponents: true,
+        includeTelephony: true,
         deploymentTarget: "replit" as const,
         generateDocumentation: true,
         ...options,
@@ -468,6 +480,412 @@ You can customize the chatbot's behavior by updating its personality profile and
         }
       }
 
+      // Phase 7.5: Generate voice components if requested
+      let voiceComponents: { [filename: string]: string } = {};
+      if (finalOptions.includeVoiceComponents) {
+        this.updateProgress(applicationId, {
+          stage: "integrating",
+          progress: 84,
+          message: "Generating voice AI components...",
+          currentComponent: "Voice Components",
+          estimatedTimeRemaining: 165
+        });
+
+        try {
+          const voicePackage = await this.voiceComponentGenerator.generateVoiceComponentPackage(
+            businessRequirement,
+            {
+              includeSpeechToText: true,
+              includeTextToSpeech: true,
+              includeVoiceCommands: true,
+              includeWebRTC: true,
+              includeVoiceAuth: false,
+              language: 'en',
+              voiceStyle: 'professional',
+              provider: 'openai'
+            }
+          );
+
+          // Generate individual component files
+          voicePackage.components.forEach((component, index) => {
+            const filename = `${component.name.toLowerCase()}.tsx`;
+            voiceComponents[filename] = component.code;
+          });
+
+          // Generate voice configuration file
+          voiceComponents["voiceConfig.ts"] = `export const voiceConfiguration = ${JSON.stringify(voicePackage.configuration, null, 2)};
+
+${voicePackage.documentation}`;
+
+          // Generate voice integration guide
+          voiceComponents["voiceIntegration.md"] = voicePackage.integrationGuide;
+
+          this.updateProgress(applicationId, {
+            stage: "integrating",
+            progress: 86,
+            message: "Voice AI components generated successfully",
+            estimatedTimeRemaining: 160
+          });
+
+        } catch (error) {
+          console.error("Failed to generate voice components:", error);
+          this.updateProgress(applicationId, {
+            stage: "integrating",
+            progress: 86,
+            message: "Voice component generation failed, continuing without voice components",
+            errors: [error instanceof Error ? error.message : "Unknown voice component error"],
+            estimatedTimeRemaining: 160
+          });
+        }
+      }
+
+      // Phase 7.6: Generate telephony components if requested
+      let telephony: { [filename: string]: string } = {};
+      if (finalOptions.includeTelephony) {
+        this.updateProgress(applicationId, {
+          stage: "integrating",
+          progress: 87,
+          message: "Generating telephony system...",
+          currentComponent: "Telephony Components",
+          estimatedTimeRemaining: 155
+        });
+
+        try {
+          // Generate telephony configuration and integration files
+          telephony["telephonyConfig.ts"] = `export const telephonyConfiguration = {
+  provider: 'twilio',
+  accountSid: process.env.TWILIO_ACCOUNT_SID || 'your-account-sid',
+  authToken: process.env.TWILIO_AUTH_TOKEN || 'your-auth-token',
+  phoneNumber: process.env.TWILIO_PHONE_NUMBER || '+1234567890',
+  features: {
+    calls: true,
+    sms: true,
+    conferences: true,
+    voicemail: true,
+    callAnalytics: true
+  }
+};
+
+export interface TelephonyActions {
+  makeCall: (to: string, from: string, url?: string) => Promise<any>;
+  sendSMS: (to: string, from: string, message: string) => Promise<any>;
+  createConference: (name: string, options?: any) => Promise<any>;
+  getCallStatus: (callSid: string) => Promise<any>;
+  listCalls: (options?: any) => Promise<any[]>;
+}
+`;
+
+          telephony["telephonyService.ts"] = `import { telephonyConfiguration } from './telephonyConfig';
+
+class TelephonyService {
+  private baseUrl: string;
+
+  constructor() {
+    this.baseUrl = process.env.API_BASE_URL || '/api';
+  }
+
+  async makeCall(to: string, from: string, url?: string) {
+    const response = await fetch(\`\${this.baseUrl}/telephony/call\`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to, from, url })
+    });
+    return response.json();
+  }
+
+  async sendSMS(to: string, from: string, message: string) {
+    const response = await fetch(\`\${this.baseUrl}/telephony/sms\`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to, from, message })
+    });
+    return response.json();
+  }
+
+  async createConference(name: string, options: any = {}) {
+    const response = await fetch(\`\${this.baseUrl}/telephony/conference\`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ conferenceName: name, ...options })
+    });
+    return response.json();
+  }
+
+  async getCallStatus(callSid: string) {
+    const response = await fetch(\`\${this.baseUrl}/telephony/calls/\${callSid}\`);
+    return response.json();
+  }
+
+  async listCalls(options: any = {}) {
+    const params = new URLSearchParams(options);
+    const response = await fetch(\`\${this.baseUrl}/telephony/calls?\${params}\`);
+    return response.json();
+  }
+}
+
+export const telephonyService = new TelephonyService();
+export default telephonyService;
+`;
+
+          telephony["telephonyComponents.tsx"] = `import React, { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Phone, MessageSquare, Users, PhoneCall, PhoneOff } from 'lucide-react';
+
+interface TelephonyComponentsProps {
+  className?: string;
+}
+
+export function TelephonyComponents({ className = '' }: TelephonyComponentsProps) {
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [message, setMessage] = useState('');
+  const [conferenceName, setConferenceName] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const makeCall = async () => {
+    if (!phoneNumber) return;
+
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/telephony/call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: phoneNumber,
+          from: process.env.TWILIO_PHONE_NUMBER || '+1234567890',
+          url: '/api/telephony/twiml/welcome'
+        })
+      });
+
+      const result = await response.json();
+      console.log('Call result:', result);
+    } catch (error) {
+      console.error('Call error:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const sendSMS = async () => {
+    if (!phoneNumber || !message) return;
+
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/telephony/sms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: phoneNumber,
+          from: process.env.TWILIO_PHONE_NUMBER || '+1234567890',
+          message
+        })
+      });
+
+      const result = await response.json();
+      console.log('SMS result:', result);
+    } catch (error) {
+      console.error('SMS error:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const createConference = async () => {
+    if (!conferenceName) return;
+
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/telephony/conference', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conferenceName })
+      });
+
+      const result = await response.json();
+      console.log('Conference result:', result);
+    } catch (error) {
+      console.error('Conference error:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className={\`grid grid-cols-1 md:grid-cols-3 gap-4 \${className}\}>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Phone className="h-5 w-5" />
+            Make Call
+          </CardTitle>
+          <CardDescription>Call any phone number</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Input
+            placeholder="Enter phone number"
+            value={phoneNumber}
+            onChange={(e) => setPhoneNumber(e.target.value)}
+          />
+          <Button
+            onClick={makeCall}
+            disabled={isLoading || !phoneNumber}
+            className="w-full"
+          >
+            <PhoneCall className="h-4 w-4 mr-2" />
+            {isLoading ? 'Calling...' : 'Make Call'}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MessageSquare className="h-5 w-5" />
+            Send SMS
+          </CardTitle>
+          <CardDescription>Send text message</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Input
+            placeholder="Enter phone number"
+            value={phoneNumber}
+            onChange={(e) => setPhoneNumber(e.target.value)}
+          />
+          <Input
+            placeholder="Enter message"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+          />
+          <Button
+            onClick={sendSMS}
+            disabled={isLoading || !phoneNumber || !message}
+            className="w-full"
+          >
+            {isLoading ? 'Sending...' : 'Send SMS'}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            Conference
+          </CardTitle>
+          <CardDescription>Create conference call</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Input
+            placeholder="Conference name"
+            value={conferenceName}
+            onChange={(e) => setConferenceName(e.target.value)}
+          />
+          <Button
+            onClick={createConference}
+            disabled={isLoading || !conferenceName}
+            className="w-full"
+          >
+            {isLoading ? 'Creating...' : 'Create Conference'}
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+`;
+
+          telephony["telephonyIntegration.md"] = `# Telephony Integration Guide
+
+## Overview
+This application includes comprehensive telephony capabilities including phone calls, SMS, and conference calling.
+
+## Features
+- **Phone Calls**: Make and receive phone calls through Twilio
+- **SMS Messaging**: Send and receive text messages
+- **Conference Calling**: Multi-party conference calls
+- **Call Analytics**: Track call metrics and performance
+- **Voicemail**: Automated voicemail handling
+
+## Configuration
+1. Set up Twilio account credentials:
+   - \`TWILIO_ACCOUNT_SID\`
+   - \`TWILIO_AUTH_TOKEN\`
+   - \`TWILIO_PHONE_NUMBER\`
+
+2. Configure provider in \`telephonyConfig.ts\`
+
+## Usage Examples
+
+### Making a Call
+\`\`\`tsx
+import { telephonyService } from './telephonyService';
+
+const call = await telephonyService.makeCall(
+  '+1234567890',
+  '+0987654321',
+  '/api/telephony/twiml/welcome'
+);
+\`\`\`
+
+### Sending SMS
+\`\`\`tsx
+const sms = await telephonyService.sendSMS(
+  '+1234567890',
+  '+0987654321',
+  'Hello from your business app!'
+);
+\`\`\`
+
+### Creating Conference
+\`\`\`tsx
+const conference = await telephonyService.createConference(
+  'Team Meeting',
+  { maxParticipants: 10 }
+);
+\`\`\`
+
+## API Endpoints
+- \`POST /api/telephony/call\` - Make phone call
+- \`POST /api/telephony/sms\` - Send SMS
+- \`POST /api/telephony/conference\` - Create conference
+- \`GET /api/telephony/calls\` - List calls
+- \`GET /api/telephony/calls/:sid\` - Get call status
+- \`POST /api/telephony/twiml/:action\` - Generate TwiML
+
+## TwiML Actions
+- \`welcome\` - Welcome message for calls
+- \`menu\` - Interactive voice menu
+- \`transfer\` - Call transfer
+- \`voicemail\` - Voicemail recording
+- \`conference\` - Conference joining
+
+## Security
+- All calls are logged and monitored
+- Phone number validation included
+- Rate limiting on SMS sending
+- Conference access controls
+`;
+
+          this.updateProgress(applicationId, {
+            stage: "integrating",
+            progress: 88,
+            message: "Telephony system generated successfully",
+            estimatedTimeRemaining: 150
+          });
+
+        } catch (error) {
+          console.error("Failed to generate telephony components:", error);
+          this.updateProgress(applicationId, {
+            stage: "integrating",
+            progress: 88,
+            message: "Telephony generation failed, continuing without telephony",
+            errors: [error instanceof Error ? error.message : "Unknown telephony error"],
+            estimatedTimeRemaining: 150
+          });
+        }
+      }
+
       // Phase 8: Generate integrations if requested
       let integrations: { [filename: string]: string } = {};
       if (finalOptions.includeIntegrations) {
@@ -476,8 +894,8 @@ You can customize the chatbot's behavior by updating its personality profile and
 
       this.updateProgress(applicationId, {
         stage: "integrating",
-        progress: 85,
-        message: "Integrating components, workflows, and chatbots...",
+        progress: 89,
+        message: "Integrating components, workflows, chatbots, voice AI, and telephony...",
         estimatedTimeRemaining: 150
       });
 
@@ -503,6 +921,8 @@ You can customize the chatbot's behavior by updating its personality profile and
           workflows,
           chatbots,
           computerUse,
+          voiceComponents,
+          telephony,
           documentation: {}
         });
       }
@@ -523,6 +943,8 @@ You can customize the chatbot's behavior by updating its personality profile and
         workflows,
         chatbots,
         computerUse,
+        voiceComponents,
+        telephony,
         documentation
       });
 

@@ -2532,6 +2532,346 @@ export async function registerRoutes(
     }
   });
 
+  // ===== Voice Processing Endpoints =====
+  // Voice processing endpoints
+  app.post("/api/voice/speech-to-text", async (req, res) => {
+    try {
+      const { audioData, language } = req.body;
+
+      if (!audioData) {
+        return res.status(400).json({ error: "Audio data is required" });
+      }
+
+      const result = await voiceService.speechToText({
+        audioData,
+        language: language || 'en'
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error("Speech-to-text error:", error);
+      res.status(500).json({
+        error: "Failed to process speech-to-text",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.post("/api/voice/text-to-speech", async (req, res) => {
+    try {
+      const { text, voice, language, speed, pitch } = req.body;
+
+      if (!text) {
+        return res.status(400).json({ error: "Text is required" });
+      }
+
+      const result = await voiceService.textToSpeech({
+        text,
+        voice: voice || 'alloy',
+        language: language || 'en',
+        speed: speed || 1.0,
+        pitch: pitch || 0.0
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error("Text-to-speech error:", error);
+      res.status(500).json({
+        error: "Failed to generate speech",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.post("/api/voice/authenticate", async (req, res) => {
+    try {
+      const { audioData } = req.body;
+
+      if (!audioData) {
+        return res.status(400).json({ error: "Audio data is required" });
+      }
+
+      const result = await voiceService.authenticateVoice({
+        audioData
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error("Voice authentication error:", error);
+      res.status(500).json({
+        error: "Failed to authenticate voice",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.post("/api/voice/process-command", async (req, res) => {
+    try {
+      const { audioData, context } = req.body;
+
+      if (!audioData) {
+        return res.status(400).json({ error: "Audio data is required" });
+      }
+
+      const result = await voiceService.processVoiceCommand(audioData, context);
+
+      res.json(result);
+    } catch (error) {
+      console.error("Voice command processing error:", error);
+      res.status(500).json({
+        error: "Failed to process voice command",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.get("/api/voice/languages", async (req, res) => {
+    try {
+      const languages = voiceService.getSupportedLanguages();
+      res.json({ languages });
+    } catch (error) {
+      console.error("Get languages error:", error);
+      res.status(500).json({
+        error: "Failed to get supported languages",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.get("/api/voice/voices", async (req, res) => {
+    try {
+      const voices = voiceService.getAvailableVoices();
+      res.json({ voices });
+    } catch (error) {
+      console.error("Get voices error:", error);
+      res.status(500).json({
+        error: "Failed to get available voices",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // ===== Voice Chatbot Endpoints =====
+  // Voice chatbot endpoints
+  app.post("/api/chatbot/:chatbotId/voice-input", async (req, res) => {
+    try {
+      const { chatbotId } = req.params;
+      const { audioData, context } = req.body;
+
+      if (!audioData) {
+        return res.status(400).json({ error: "Audio data is required" });
+      }
+
+      // Process voice input to text
+      const transcript = await embeddedChatbotService.processVoiceInput(
+        chatbotId,
+        audioData,
+        context || {}
+      );
+
+      // Then process the text message normally
+      const response = await embeddedChatbotService.processMessage(
+        chatbotId,
+        transcript,
+        context || {}
+      );
+
+      res.json({
+        transcript,
+        chatbotResponse: response
+      });
+    } catch (error) {
+      console.error("Voice chatbot input error:", error);
+      res.status(500).json({
+        error: "Failed to process voice input",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.post("/api/chatbot/:chatbotId/voice-output", async (req, res) => {
+    try {
+      const { chatbotId } = req.params;
+      const { text, voice, language, speed } = req.body;
+
+      if (!text) {
+        return res.status(400).json({ error: "Text is required" });
+      }
+
+      const audioData = await embeddedChatbotService.generateVoiceOutput(
+        text,
+        voice || 'alloy',
+        language || 'en',
+        speed || 1.0
+      );
+
+      res.json({
+        audioData,
+        voice: voice || 'alloy',
+        language: language || 'en',
+        speed: speed || 1.0
+      });
+    } catch (error) {
+      console.error("Voice chatbot output error:", error);
+      res.status(500).json({
+        error: "Failed to generate voice output",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // ===== Telephony Endpoints =====
+  // Telephony endpoints
+  app.post("/api/telephony/call", async (req, res) => {
+    try {
+      const { to, from, url, conferenceName } = req.body;
+
+      if (!to || !from) {
+        return res.status(400).json({ error: "Phone numbers (to, from) are required" });
+      }
+
+      const result = await telephonyService.processTelephonyRequest({
+        action: 'call',
+        to,
+        from,
+        url: url || '/api/telephony/handle-call',
+        conferenceName
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error("Telephony call error:", error);
+      res.status(500).json({
+        error: "Failed to initiate call",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.post("/api/telephony/sms", async (req, res) => {
+    try {
+      const { to, from, message } = req.body;
+
+      if (!to || !from || !message) {
+        return res.status(400).json({ error: "Phone numbers (to, from) and message are required" });
+      }
+
+      const result = await telephonyService.processTelephonyRequest({
+        action: 'sms',
+        to,
+        from,
+        message
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error("Telephony SMS error:", error);
+      res.status(500).json({
+        error: "Failed to send SMS",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.post("/api/telephony/conference", async (req, res) => {
+    try {
+      const { conferenceName, options } = req.body;
+
+      if (!conferenceName) {
+        return res.status(400).json({ error: "Conference name is required" });
+      }
+
+      const result = await telephonyService.processTelephonyRequest({
+        action: 'conference',
+        conferenceName,
+        ...options
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error("Telephony conference error:", error);
+      res.status(500).json({
+        error: "Failed to create conference",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.get("/api/telephony/calls/:callSid", async (req, res) => {
+    try {
+      const { callSid } = req.params;
+
+      const result = await telephonyService.processTelephonyRequest({
+        action: 'status',
+        callSid
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error("Telephony status error:", error);
+      res.status(500).json({
+        error: "Failed to get call status",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.get("/api/telephony/calls", async (req, res) => {
+    try {
+      const { status, from, to, limit } = req.query;
+
+      const result = await telephonyService.processTelephonyRequest({
+        action: 'list',
+        status: status as string,
+        from: from as string,
+        to: to as string
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error("Telephony list calls error:", error);
+      res.status(500).json({
+        error: "Failed to list calls",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.post("/api/telephony/twiml/:action", async (req, res) => {
+    try {
+      const { action } = req.params;
+      const parameters = req.body;
+
+      const twiml = telephonyService.generateTwiml(action, parameters);
+      res.header('Content-Type', 'text/xml');
+      res.send(twiml);
+    } catch (error) {
+      console.error("TwiML generation error:", error);
+      res.status(500).json({
+        error: "Failed to generate TwiML",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.get("/api/telephony/analytics", async (req, res) => {
+    try {
+      const { timeframe = 'day' } = req.query;
+
+      const analytics = await telephonyService.generateAnalytics(
+        timeframe as 'day' | 'week' | 'month'
+      );
+
+      res.json(analytics);
+    } catch (error) {
+      console.error("Telephony analytics error:", error);
+      res.status(500).json({
+        error: "Failed to generate analytics",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
   return httpServer;
 }
 

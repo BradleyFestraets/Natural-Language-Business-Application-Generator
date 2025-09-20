@@ -55,6 +55,12 @@ export interface ChatbotResponse {
     validation?: string;
   };
   contextUpdate?: Partial<ChatbotContext>;
+  voiceOutput?: {
+    text: string;
+    voice: string;
+    language: string;
+    speed: number;
+  };
 }
 
 /**
@@ -129,6 +135,73 @@ export class EmbeddedChatbotService {
   }
 
   /**
+   * Process voice input and convert to text
+   */
+  async processVoiceInput(
+    chatbotId: string,
+    audioData: string,
+    context: ChatbotContext,
+    userId?: string
+  ): Promise<string> {
+    try {
+      if (!isAIServiceAvailable() || !this.openai) {
+        throw new Error("AI service unavailable for voice processing");
+      }
+
+      // Convert base64 audio data to buffer
+      const audioBuffer = Buffer.from(audioData, 'base64');
+      const audioFile = new File([audioBuffer], 'audio.wav', { type: 'audio/wav' });
+
+      // Use Whisper to transcribe the audio
+      const response = await this.openai.audio.transcriptions.create({
+        file: audioFile,
+        model: "whisper-1",
+        language: 'en', // Could be made configurable
+        response_format: 'json'
+      });
+
+      const transcript = response.text;
+      if (!transcript) {
+        throw new Error("No speech detected in audio");
+      }
+
+      return transcript;
+    } catch (error) {
+      console.error(`[EmbeddedChatbot] Voice processing error for chatbot ${chatbotId}:`, error);
+      throw new Error(`Voice processing failed: ${error}`);
+    }
+  }
+
+  /**
+   * Generate voice output for chatbot response
+   */
+  async generateVoiceOutput(
+    text: string,
+    voice: string = 'alloy',
+    language: string = 'en',
+    speed: number = 1.0
+  ): Promise<string> {
+    try {
+      if (!isAIServiceAvailable() || !this.openai) {
+        throw new Error("AI service unavailable for voice generation");
+      }
+
+      const response = await this.openai.audio.speech.create({
+        model: "tts-1",
+        voice: voice as any,
+        input: text,
+        speed: speed
+      });
+
+      const buffer = Buffer.from(await response.arrayBuffer());
+      return buffer.toString('base64');
+    } catch (error) {
+      console.error("[EmbeddedChatbot] Voice generation error:", error);
+      throw new Error(`Voice generation failed: ${error}`);
+    }
+  }
+
+  /**
    * Process chat message and generate intelligent response
    */
   async processMessage(
@@ -186,9 +259,16 @@ export class EmbeddedChatbotService {
           context
         );
       } else {
+        const responseText = aiMessage.content || "I'm here to help! How can I assist you?";
         chatbotResponse = {
-          message: aiMessage.content || "I'm here to help! How can I assist you?",
-          contextUpdate: context
+          message: responseText,
+          contextUpdate: context,
+          voiceOutput: {
+            text: responseText,
+            voice: 'alloy', // Could be made configurable based on chatbot personality
+            language: 'en',
+            speed: 1.0
+          }
         };
       }
 
