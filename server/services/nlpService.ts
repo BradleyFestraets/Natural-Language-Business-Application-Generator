@@ -184,6 +184,7 @@ export class NLPService {
   private degradationStartTime: number | null = null;
   private lastSuccessfulAICall: number | null = null;
   private fallbackModeActive: boolean = false;
+  private terminologyMappings: Map<string, string> = new Map();
 
   // Circuit breaker properties
   private circuitState: CircuitState = CircuitState.CLOSED;
@@ -226,6 +227,36 @@ export class NLPService {
       // Placeholder client for graceful degradation
       this.openai = null as any;
     }
+    
+    // Initialize business-to-technical terminology mappings
+    this.initializeTerminologyMappings();
+  }
+  
+  /**
+   * Initialize business terminology to technical implementation mappings
+   */
+  private initializeTerminologyMappings(): void {
+    // Common business terms to technical implementations
+    this.terminologyMappings.set('approval workflow', 'sequential_approval_chain');
+    this.terminologyMappings.set('background check', 'api_integration_background_verification');
+    this.terminologyMappings.set('document upload', 'file_storage_integration');
+    this.terminologyMappings.set('email notification', 'smtp_email_service');
+    this.terminologyMappings.set('sms alert', 'twilio_sms_integration');
+    this.terminologyMappings.set('manager approval', 'role_based_approval');
+    this.terminologyMappings.set('expense report', 'financial_form_workflow');
+    this.terminologyMappings.set('employee onboarding', 'hr_onboarding_process');
+    this.terminologyMappings.set('customer portal', 'external_user_interface');
+    this.terminologyMappings.set('payment processing', 'payment_gateway_integration');
+    this.terminologyMappings.set('inventory management', 'erp_inventory_module');
+    this.terminologyMappings.set('leave request', 'hr_time_off_workflow');
+    this.terminologyMappings.set('purchase order', 'procurement_workflow');
+    this.terminologyMappings.set('invoice processing', 'accounts_payable_workflow');
+    this.terminologyMappings.set('contract management', 'legal_document_workflow');
+    this.terminologyMappings.set('customer feedback', 'survey_collection_system');
+    this.terminologyMappings.set('performance review', 'hr_evaluation_process');
+    this.terminologyMappings.set('sales pipeline', 'crm_opportunity_management');
+    this.terminologyMappings.set('help desk ticket', 'support_ticketing_system');
+    this.terminologyMappings.set('compliance audit', 'regulatory_compliance_workflow');
   }
 
   /**
@@ -1281,5 +1312,786 @@ Focus on enterprise-grade applications with Fortune 500 standards for security, 
   private setCachedResult(key: string, result: ExtractedBusinessData): void {
     this.cache.set(key, result);
     this.cacheTimestamps.set(key, Date.now());
+  }
+
+  /**
+   * Get auto-completion suggestions for business descriptions
+   */
+  async getAutoCompleteSuggestions(partialDescription: string, options?: {
+    context?: string;
+    maxSuggestions?: number;
+  }): Promise<string[]> {
+    const maxSuggestions = options?.maxSuggestions || 5;
+    
+    // Common business scenario patterns
+    const commonScenarios = [
+      "with approval workflows that route to managers and executives based on request type and amount",
+      "including document collection, validation, and automated processing for compliance",
+      "with integration to existing HR systems for employee data synchronization",
+      "featuring automated notifications via email and SMS at each workflow stage",
+      "including role-based access control for different user levels",
+      "with real-time reporting and analytics dashboard for management",
+      "including audit trails and compliance tracking for regulatory requirements",
+      "featuring mobile-responsive forms for field workers and remote employees",
+      "with automated data validation and error handling",
+      "including file upload capabilities for supporting documentation",
+      "with customizable approval chains based on business rules",
+      "featuring integration with payment processing systems",
+      "including customer portal for self-service requests",
+      "with automated task assignment and deadline tracking",
+      "featuring multi-language support for global operations"
+    ];
+
+    // Filter suggestions based on partial description
+    const lowerPartial = partialDescription.toLowerCase();
+    const filtered = commonScenarios.filter(scenario => {
+      // Don't suggest something already mentioned
+      if (lowerPartial.includes(scenario.toLowerCase().substring(0, 20))) {
+        return false;
+      }
+      // Match based on context
+      if (lowerPartial.includes('approval') && scenario.includes('approval')) return true;
+      if (lowerPartial.includes('document') && scenario.includes('document')) return true;
+      if (lowerPartial.includes('integration') && scenario.includes('integration')) return true;
+      if (lowerPartial.includes('notification') && scenario.includes('notification')) return true;
+      if (lowerPartial.includes('report') && scenario.includes('report')) return true;
+      if (lowerPartial.includes('mobile') && scenario.includes('mobile')) return true;
+      if (lowerPartial.includes('payment') && scenario.includes('payment')) return true;
+      // Default suggestions if no specific match
+      return true;
+    });
+
+    // If AI service is available, enhance with AI suggestions
+    const aiAvailable = await this.checkAIServiceAvailability();
+    if (aiAvailable && this.openai) {
+      try {
+        const prompt = `Given this partial business application description: "${partialDescription}"
+        Suggest ${maxSuggestions} natural completions that would continue this description.
+        Focus on common business patterns and requirements.
+        Return only the completion text that would naturally follow the partial description.
+        Format as JSON array: ["completion 1", "completion 2", ...]`;
+
+        const response = await this.openai.chat.completions.create({
+          model: "gpt-3.5-turbo",
+          messages: [
+            { role: "system", content: "You are an expert at predicting business application requirements." },
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.7,
+          max_tokens: 200
+        });
+
+        const content = response.choices[0]?.message?.content;
+        if (content) {
+          try {
+            const aiSuggestions = JSON.parse(content);
+            if (Array.isArray(aiSuggestions)) {
+              return aiSuggestions.slice(0, maxSuggestions);
+            }
+          } catch {
+            // Fall back to rule-based suggestions
+          }
+        }
+      } catch (error) {
+        console.error("Error getting AI suggestions:", error);
+        // Fall back to rule-based suggestions
+      }
+    }
+
+    // Return filtered rule-based suggestions
+    return filtered.slice(0, maxSuggestions);
+  }
+
+  /**
+   * Validate business description - wrapper method
+   */
+  async validateBusinessDescription(description: string, options?: {
+    includeRecommendations?: boolean;
+    checkCompleteness?: boolean;
+  }): Promise<ValidationResult> {
+    // Use the existing validateDescription method
+    return this.validateDescription(description);
+  }
+
+  /**
+   * Extract comprehensive requirements with enhanced function calling
+   * This is the main method for Story 2.2 implementation
+   */
+  async extractRequirements(description: string, options?: {
+    context?: any;
+    enableAdvancedAnalysis?: boolean;
+  }): Promise<ExtractedBusinessData> {
+    const aiAvailable = await this.checkAIServiceAvailability();
+    
+    if (!aiAvailable) {
+      return this.parseWithFallback(description);
+    }
+
+    const enhancedPrompt = this.getEnhancedExtractionPrompt();
+    const advancedSchema = this.getAdvancedFunctionSchema();
+
+    try {
+      const response = await this.openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: enhancedPrompt },
+          { role: "user", content: `Extract comprehensive business requirements from: ${description}` }
+        ],
+        functions: [advancedSchema],
+        function_call: { name: "extract_advanced_requirements" },
+        temperature: 0.2,
+        max_tokens: 2500
+      });
+
+      const functionCall = response.choices[0]?.message?.function_call;
+      if (!functionCall?.arguments) {
+        throw new Error("No function call in response");
+      }
+
+      const parsedData = JSON.parse(functionCall.arguments);
+      
+      // Apply terminology mapping
+      const mappedData = this.applyTerminologyMapping(parsedData);
+      
+      // Add AI chatbot placement recommendations
+      const chatbotRecommendations = this.identifyAIChatbotPlacements(mappedData);
+      
+      // Calculate confidence with enhanced metrics
+      const confidence = this.calculateAdvancedConfidence(mappedData);
+
+      return {
+        ...mappedData,
+        confidence,
+        recommendations: chatbotRecommendations,
+        usage: {
+          promptTokens: response.usage?.prompt_tokens || 0,
+          completionTokens: response.usage?.completion_tokens || 0,
+          totalTokens: response.usage?.total_tokens || 0
+        }
+      };
+    } catch (error) {
+      console.error("Error extracting requirements:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Extract workflow patterns with advanced recognition
+   */
+  async extractWorkflowPatterns(description: string): Promise<WorkflowPattern[]> {
+    const lowerDesc = description.toLowerCase();
+    const patterns: WorkflowPattern[] = [];
+
+    // Sequential pattern detection
+    const sequentialIndicators = ['then', 'after', 'next', 'followed by', 'step-by-step'];
+    if (sequentialIndicators.some(indicator => lowerDesc.includes(indicator))) {
+      patterns.push({
+        name: "Sequential Process Flow",
+        type: "sequential",
+        description: "Linear progression through defined steps",
+        complexity: "simple",
+        businessRules: ["Complete each step before proceeding", "Maintain audit trail"]
+      });
+    }
+
+    // Parallel pattern detection
+    const parallelIndicators = ['simultaneously', 'parallel', 'concurrent', 'at the same time'];
+    if (parallelIndicators.some(indicator => lowerDesc.includes(indicator))) {
+      patterns.push({
+        name: "Parallel Processing",
+        type: "parallel",
+        description: "Multiple processes executing concurrently",
+        complexity: "moderate",
+        businessRules: ["Synchronize parallel branches", "Handle race conditions"]
+      });
+    }
+
+    // Conditional pattern detection
+    const conditionalIndicators = ['if', 'when', 'based on', 'depending on', 'criteria'];
+    if (conditionalIndicators.some(indicator => lowerDesc.includes(indicator))) {
+      patterns.push({
+        name: "Conditional Routing",
+        type: "conditional",
+        description: "Decision-based workflow branching",
+        complexity: "moderate",
+        businessRules: ["Evaluate conditions accurately", "Define default paths"]
+      });
+    }
+
+    // Approval chain pattern detection
+    const approvalIndicators = ['approval', 'authorize', 'sign off', 'review', 'escalate'];
+    if (approvalIndicators.some(indicator => lowerDesc.includes(indicator))) {
+      patterns.push({
+        name: "Approval Hierarchy",
+        type: "approval_chain",
+        description: "Multi-level approval workflow",
+        complexity: "complex",
+        businessRules: ["Define approval limits", "Set escalation timeouts", "Track approval history"]
+      });
+    }
+
+    // Loop pattern detection
+    const loopIndicators = ['repeat', 'iterate', 'retry', 'loop', 'until'];
+    if (loopIndicators.some(indicator => lowerDesc.includes(indicator))) {
+      patterns.push({
+        name: "Iterative Process",
+        type: "loop",
+        description: "Repeating process until conditions met",
+        complexity: "moderate",
+        businessRules: ["Define exit conditions", "Prevent infinite loops"]
+      });
+    }
+
+    return patterns;
+  }
+
+  /**
+   * Extract form fields with data types and validation rules
+   */
+  async inferFormFields(description: string): Promise<Array<{
+    name: string;
+    dataType: string;
+    validationRules: string[];
+    required: boolean;
+  }>> {
+    const fields: Array<{
+      name: string;
+      dataType: string;
+      validationRules: string[];
+      required: boolean;
+    }> = [];
+
+    const lowerDesc = description.toLowerCase();
+
+    // Common form field patterns
+    if (lowerDesc.includes('email')) {
+      fields.push({
+        name: "email",
+        dataType: "email",
+        validationRules: ["Valid email format", "Required field"],
+        required: true
+      });
+    }
+
+    if (lowerDesc.includes('phone') || lowerDesc.includes('contact')) {
+      fields.push({
+        name: "phoneNumber",
+        dataType: "phone",
+        validationRules: ["Valid phone format", "10-digit number"],
+        required: true
+      });
+    }
+
+    if (lowerDesc.includes('date') || lowerDesc.includes('deadline')) {
+      fields.push({
+        name: "date",
+        dataType: "date",
+        validationRules: ["Valid date format", "Future date only"],
+        required: true
+      });
+    }
+
+    if (lowerDesc.includes('amount') || lowerDesc.includes('cost') || lowerDesc.includes('price')) {
+      fields.push({
+        name: "amount",
+        dataType: "currency",
+        validationRules: ["Positive number", "Maximum 2 decimal places"],
+        required: true
+      });
+    }
+
+    if (lowerDesc.includes('file') || lowerDesc.includes('document') || lowerDesc.includes('upload')) {
+      fields.push({
+        name: "document",
+        dataType: "file",
+        validationRules: ["PDF, DOC, DOCX formats", "Maximum 10MB"],
+        required: false
+      });
+    }
+
+    if (lowerDesc.includes('reason') || lowerDesc.includes('description') || lowerDesc.includes('comments')) {
+      fields.push({
+        name: "description",
+        dataType: "text",
+        validationRules: ["Minimum 10 characters", "Maximum 500 characters"],
+        required: false
+      });
+    }
+
+    return fields;
+  }
+
+  /**
+   * Extract approval chains with routing logic
+   */
+  async extractApprovalChains(description: string): Promise<Array<{
+    level: number;
+    approver: string;
+    conditions: string[];
+    escalation: string;
+    timeout: string;
+  }>> {
+    const chains: Array<{
+      level: number;
+      approver: string;
+      conditions: string[];
+      escalation: string;
+      timeout: string;
+    }> = [];
+
+    const lowerDesc = description.toLowerCase();
+
+    // Manager approval
+    if (lowerDesc.includes('manager')) {
+      chains.push({
+        level: 1,
+        approver: "Direct Manager",
+        conditions: ["Request submitted", "All required fields complete"],
+        escalation: "Department Head",
+        timeout: "24 hours"
+      });
+    }
+
+    // Director/Department head approval
+    if (lowerDesc.includes('director') || lowerDesc.includes('department head')) {
+      chains.push({
+        level: 2,
+        approver: "Department Head",
+        conditions: ["Manager approved", "Amount > $5000"],
+        escalation: "VP",
+        timeout: "48 hours"
+      });
+    }
+
+    // VP/Executive approval
+    if (lowerDesc.includes('vp') || lowerDesc.includes('vice president') || lowerDesc.includes('executive')) {
+      chains.push({
+        level: 3,
+        approver: "Vice President",
+        conditions: ["Department Head approved", "Amount > $25000"],
+        escalation: "CEO",
+        timeout: "72 hours"
+      });
+    }
+
+    // Finance approval
+    if (lowerDesc.includes('finance') || lowerDesc.includes('budget')) {
+      chains.push({
+        level: 2,
+        approver: "Finance Team",
+        conditions: ["Budget impact", "Financial compliance required"],
+        escalation: "CFO",
+        timeout: "24 hours"
+      });
+    }
+
+    return chains;
+  }
+
+  /**
+   * Identify integration requirements for external services
+   */
+  async identifyIntegrationRequirements(description: string): Promise<BusinessIntegration[]> {
+    const integrations: BusinessIntegration[] = [];
+    const lowerDesc = description.toLowerCase();
+
+    // Email integration
+    if (lowerDesc.includes('email') || lowerDesc.includes('notification')) {
+      integrations.push({
+        name: "Email Service",
+        type: "email",
+        purpose: "Send automated notifications and alerts",
+        criticality: "essential",
+        dataFlow: "outbound"
+      });
+    }
+
+    // SMS integration
+    if (lowerDesc.includes('sms') || lowerDesc.includes('text message')) {
+      integrations.push({
+        name: "SMS Gateway",
+        type: "notification",
+        purpose: "Send SMS alerts for critical updates",
+        criticality: "important",
+        dataFlow: "outbound"
+      });
+    }
+
+    // Database integration
+    if (lowerDesc.includes('database') || lowerDesc.includes('data storage')) {
+      integrations.push({
+        name: "Database System",
+        type: "database",
+        purpose: "Persistent data storage and retrieval",
+        criticality: "essential",
+        dataFlow: "bidirectional"
+      });
+    }
+
+    // API integration
+    if (lowerDesc.includes('api') || lowerDesc.includes('third-party') || lowerDesc.includes('external')) {
+      integrations.push({
+        name: "External API",
+        type: "api",
+        purpose: "Connect with external services",
+        criticality: "important",
+        dataFlow: "bidirectional"
+      });
+    }
+
+    // File storage integration
+    if (lowerDesc.includes('file') || lowerDesc.includes('document') || lowerDesc.includes('upload')) {
+      integrations.push({
+        name: "File Storage",
+        type: "file_system",
+        purpose: "Store and manage uploaded documents",
+        criticality: "essential",
+        dataFlow: "bidirectional"
+      });
+    }
+
+    // Authentication integration
+    if (lowerDesc.includes('login') || lowerDesc.includes('authentication') || lowerDesc.includes('sso')) {
+      integrations.push({
+        name: "Authentication Service",
+        type: "authentication",
+        purpose: "User authentication and authorization",
+        criticality: "essential",
+        dataFlow: "bidirectional"
+      });
+    }
+
+    return integrations;
+  }
+
+  /**
+   * Map business terminology to technical implementations
+   */
+  private applyTerminologyMapping(data: any): any {
+    const mapped = { ...data };
+    
+    // Map processes
+    if (mapped.processes) {
+      mapped.processes = mapped.processes.map((process: any) => ({
+        ...process,
+        technicalImplementation: this.mapTermToTechnical(process.name)
+      }));
+    }
+
+    // Map integrations
+    if (mapped.integrations) {
+      mapped.integrations = mapped.integrations.map((integration: any) => ({
+        ...integration,
+        technicalImplementation: this.mapTermToTechnical(integration.name)
+      }));
+    }
+
+    return mapped;
+  }
+
+  /**
+   * Map individual business term to technical implementation
+   */
+  private mapTermToTechnical(businessTerm: string): string {
+    const lowerTerm = businessTerm.toLowerCase();
+    
+    // Check direct mapping
+    for (const [key, value] of this.terminologyMappings) {
+      if (lowerTerm.includes(key)) {
+        return value;
+      }
+    }
+
+    // Generate technical name if no mapping found
+    return businessTerm
+      .toLowerCase()
+      .replace(/\s+/g, '_')
+      .replace(/[^a-z0-9_]/g, '');
+  }
+
+  /**
+   * Identify where AI chatbots should be placed for user guidance
+   */
+  private identifyAIChatbotPlacements(data: ExtractedBusinessData): string[] {
+    const recommendations: string[] = [];
+
+    // Complex forms need chatbot assistance
+    if (data.forms?.some(f => f.complexity === 'complex')) {
+      recommendations.push("AI chatbot recommended for complex form assistance and field validation guidance");
+    }
+
+    // Multi-step processes benefit from guidance
+    if (data.processes?.length > 3) {
+      recommendations.push("AI chatbot recommended for multi-step process navigation and progress tracking");
+    }
+
+    // Approval workflows need explanation
+    if (data.approvals?.length > 0) {
+      recommendations.push("AI chatbot recommended for approval status inquiries and escalation guidance");
+    }
+
+    // Integration errors need help
+    if (data.integrations?.some(i => i.criticality === 'essential')) {
+      recommendations.push("AI chatbot recommended for troubleshooting integration issues and error resolution");
+    }
+
+    // New user onboarding
+    if (data.businessContext?.scope === 'enterprise') {
+      recommendations.push("AI chatbot recommended for new user onboarding and feature discovery");
+    }
+
+    // Compliance assistance
+    if (data.businessContext?.complianceRequirements?.length > 0) {
+      recommendations.push("AI chatbot recommended for compliance guidance and regulatory requirement explanations");
+    }
+
+    return recommendations;
+  }
+
+  /**
+   * Calculate advanced confidence score
+   */
+  private calculateAdvancedConfidence(data: ExtractedBusinessData): number {
+    let score = 0;
+    let factors = 0;
+
+    // Business context completeness
+    if (data.businessContext) {
+      score += data.businessContext.industry !== 'General' ? 0.15 : 0.05;
+      score += data.businessContext.complianceRequirements?.length > 0 ? 0.1 : 0;
+      factors += 0.25;
+    }
+
+    // Process definition quality
+    if (data.processes?.length > 0) {
+      score += Math.min(data.processes.length / 5, 1) * 0.2;
+      factors += 0.2;
+    }
+
+    // Form specification detail
+    if (data.forms?.length > 0) {
+      const detailedForms = data.forms.filter(f => f.validationRules?.length > 0);
+      score += (detailedForms.length / data.forms.length) * 0.15;
+      factors += 0.15;
+    }
+
+    // Workflow pattern recognition
+    if (data.workflowPatterns?.length > 0) {
+      score += Math.min(data.workflowPatterns.length / 3, 1) * 0.15;
+      factors += 0.15;
+    }
+
+    // Integration completeness
+    if (data.integrations?.length > 0) {
+      score += Math.min(data.integrations.length / 4, 1) * 0.15;
+      factors += 0.15;
+    }
+
+    // Risk and resource assessment
+    if (data.riskAssessment && data.resourceRequirements) {
+      score += 0.1;
+      factors += 0.1;
+    }
+
+    return factors > 0 ? Math.min(score / factors, 1) : 0.5;
+  }
+
+  /**
+   * Get enhanced extraction prompt for advanced analysis
+   */
+  private getEnhancedExtractionPrompt(): string {
+    return `You are an elite Fortune 500 enterprise architect and business analyst AI with deep expertise in business process automation, application generation, and digital transformation. Your mission is to extract COMPREHENSIVE, ACTIONABLE business requirements that enable automatic application generation.
+
+ADVANCED EXTRACTION REQUIREMENTS:
+
+1. WORKFLOW PATTERN RECOGNITION:
+   - Sequential workflows: Step-by-step linear processes
+   - Parallel workflows: Concurrent execution paths
+   - Conditional workflows: Decision-based branching
+   - Loop patterns: Iterative processes with exit conditions
+   - Escalation patterns: Time-based or condition-based escalations
+   - Approval chains: Multi-level hierarchical approvals
+
+2. FORM FIELD INFERENCE:
+   - Data types: text, number, date, email, phone, file, currency, percentage
+   - Validation rules: required, format, range, length, pattern matching
+   - Field relationships: dependent fields, conditional visibility
+   - Auto-population: default values, calculated fields
+   - Multi-step forms: wizard-style progression
+
+3. APPROVAL CHAIN EXTRACTION:
+   - Approval levels and hierarchy
+   - Role-based routing (manager, director, VP, C-suite)
+   - Conditional routing based on amount, type, urgency
+   - Escalation paths and timeouts
+   - Delegation and out-of-office handling
+   - Parallel vs sequential approvals
+
+4. INTEGRATION IDENTIFICATION:
+   - Email services: SMTP, SendGrid, AWS SES
+   - SMS gateways: Twilio, AWS SNS
+   - Database systems: PostgreSQL, MongoDB, DynamoDB
+   - File storage: S3, Google Cloud Storage
+   - Payment gateways: Stripe, PayPal, Square
+   - Authentication: OAuth, SAML, Active Directory
+   - APIs: REST, GraphQL, SOAP
+
+5. AI CHATBOT PLACEMENT:
+   - Form completion assistance
+   - Process navigation guidance
+   - Error resolution help
+   - Status inquiry handling
+   - FAQ and knowledge base integration
+   - Proactive user assistance
+
+6. BUSINESS-TO-TECHNICAL MAPPING:
+   - Convert business language to technical specifications
+   - Identify implementation patterns
+   - Suggest architectural components
+   - Define data models and relationships
+   - Specify security requirements
+
+Provide MAXIMUM detail and specificity for automatic code generation. Include confidence scores and recommendations for optimal implementation.`;
+  }
+
+  /**
+   * Get advanced function schema for comprehensive extraction
+   */
+  private getAdvancedFunctionSchema() {
+    return {
+      name: "extract_advanced_requirements",
+      description: "Extract comprehensive business requirements with advanced pattern recognition and technical mapping",
+      parameters: {
+        type: "object",
+        properties: {
+          businessContext: {
+            type: "object",
+            properties: {
+              industry: { type: "string" },
+              criticality: { type: "string", enum: ["mission_critical", "important", "standard", "support"] },
+              scope: { type: "string", enum: ["department", "division", "enterprise"] },
+              complianceRequirements: { type: "array", items: { type: "string" } },
+              businessObjective: { type: "string" },
+              successCriteria: { type: "array", items: { type: "string" } }
+            }
+          },
+          processes: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string" },
+                type: { type: "string", enum: ["core", "support", "governance", "integration"] },
+                description: { type: "string" },
+                complexity: { type: "string", enum: ["low", "medium", "high"] },
+                dependencies: { type: "array", items: { type: "string" } },
+                steps: { type: "array", items: { type: "string" } },
+                actors: { type: "array", items: { type: "string" } }
+              }
+            }
+          },
+          forms: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string" },
+                purpose: { type: "string" },
+                complexity: { type: "string", enum: ["simple", "moderate", "complex"] },
+                fields: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      name: { type: "string" },
+                      dataType: { type: "string" },
+                      required: { type: "boolean" },
+                      validationRules: { type: "array", items: { type: "string" } }
+                    }
+                  }
+                },
+                dataTypes: { type: "array", items: { type: "string" } },
+                validationRules: { type: "array", items: { type: "string" } }
+              }
+            }
+          },
+          approvals: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string" },
+                role: { type: "string" },
+                level: { type: "number" },
+                criteria: { type: "string" },
+                conditions: { type: "array", items: { type: "string" } },
+                escalation: { type: "string" },
+                timeLimit: { type: "string" },
+                delegationRules: { type: "string" }
+              }
+            }
+          },
+          integrations: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string" },
+                type: { type: "string", enum: ["api", "database", "file_system", "email", "notification", "authentication", "payment"] },
+                purpose: { type: "string" },
+                criticality: { type: "string", enum: ["essential", "important", "optional"] },
+                dataFlow: { type: "string", enum: ["inbound", "outbound", "bidirectional"] },
+                technicalSpec: { type: "string" }
+              }
+            }
+          },
+          workflowPatterns: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string" },
+                type: { type: "string", enum: ["sequential", "parallel", "conditional", "loop", "escalation", "approval_chain"] },
+                description: { type: "string" },
+                complexity: { type: "string", enum: ["simple", "moderate", "complex"] },
+                businessRules: { type: "array", items: { type: "string" } },
+                implementation: { type: "string" }
+              }
+            }
+          },
+          aiChatbotRecommendations: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                placement: { type: "string" },
+                purpose: { type: "string" },
+                capabilities: { type: "array", items: { type: "string" } }
+              }
+            }
+          },
+          riskAssessment: {
+            type: "object",
+            properties: {
+              securityRisks: { type: "array", items: { type: "string" } },
+              complianceRisks: { type: "array", items: { type: "string" } },
+              operationalRisks: { type: "array", items: { type: "string" } },
+              mitigationStrategies: { type: "array", items: { type: "string" } }
+            }
+          },
+          resourceRequirements: {
+            type: "object",
+            properties: {
+              userRoles: { type: "array", items: { type: "string" } },
+              technicalComplexity: { type: "string", enum: ["low", "medium", "high"] },
+              estimatedTimeframe: { type: "string" },
+              infrastructureNeeds: { type: "array", items: { type: "string" } }
+            }
+          },
+          confidence: { type: "number", minimum: 0, maximum: 1 }
+        },
+        required: ["businessContext", "processes", "forms", "approvals", "integrations", "workflowPatterns", "confidence"]
+      }
+    };
   }
 }

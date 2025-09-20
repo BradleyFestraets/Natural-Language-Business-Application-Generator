@@ -12,6 +12,7 @@ import ApplicationDashboard from "@/pages/application-dashboard";
 import ApplicationViewer from "@/pages/application-viewer";
 import WorkflowDashboard from "@/pages/workflow-dashboard";
 import WorkflowExecution from "@/pages/workflow-execution";
+import NLPDemo from "@/pages/NLPDemo";
 
 function Router() {
   return (
@@ -21,6 +22,7 @@ function Router() {
       
       {/* Natural Language Business Application Generator Routes */}
       <Route path="/" component={NaturalLanguageInput} />
+      <Route path="/nlp-demo" component={NLPDemo} />
       <Route path="/dashboard" component={ApplicationDashboard} />
       <Route path="/application/:id" component={ApplicationViewer} />
       

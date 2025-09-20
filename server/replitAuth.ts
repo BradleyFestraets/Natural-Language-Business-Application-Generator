@@ -210,3 +210,22 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     return;
   }
 };
+
+// Export auth handler for server/index.ts
+import { Router } from "express";
+
+export const replitAuthHandler = Router();
+
+// Auth status endpoint
+replitAuthHandler.get("/status", (req, res) => {
+  if (req.isAuthenticated()) {
+    res.json({
+      authenticated: true,
+      user: req.user
+    });
+  } else {
+    res.json({
+      authenticated: false
+    });
+  }
+});

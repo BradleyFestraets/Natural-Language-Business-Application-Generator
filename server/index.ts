@@ -7,11 +7,11 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import compression from "compression";
 import { auth } from "@shared/schema";
-import { replitAuthHandler } from "./replitAuth";
+import { replitAuthHandler, setupAuth } from "./replitAuth";
 import { storage } from "./storage";
-import { router } from "./routes";
-import { workflowRouter } from "./workflowRoutes";
-import { workflowExecutionEngine } from "./engines/workflowExecutionEngineInstance";
+import { registerRoutes } from "./routes";
+import { registerWorkflowRoutes } from "./workflowRoutes";
+import { getWorkflowExecutionEngine } from "./engines/workflowExecutionEngineInstance";
 
 const app = express();
 const server = createServer(app);
@@ -118,12 +118,15 @@ app.get("/api/status", async (req, res) => {
   }
 });
 
+// Set up authentication first
+setupAuth(app).catch(console.error);
+
 // Auth routes
 app.use("/api/auth", replitAuthHandler);
 
-// API routes
-app.use("/api", router);
-app.use("/api/workflow", workflowRouter);
+// Register API routes
+registerRoutes(app).catch(console.error);
+registerWorkflowRoutes(app);
 
 // Enhanced WebSocket handling with heartbeat and reconnection
 const heartbeat = function() {
@@ -166,12 +169,30 @@ wss.on('connection', (ws, req) => {
       }
 
       if (data.type === 'subscribe_workflow_progress' && data.executionId) {
+        const workflowExecutionEngine = getWorkflowExecutionEngine();
         workflowExecutionEngine.registerProgressClient(data.executionId, ws);
 
         ws.send(JSON.stringify({
           type: 'subscription_confirmed',
           subscription: 'workflow_progress',
           executionId: data.executionId
+        }));
+      }
+
+      // NLP streaming subscription
+      if (data.type === 'subscribe_nlp_parsing' && data.conversationId) {
+        const { NLPService } = require('./services/nlpService');
+        const nlpService = new NLPService();
+        
+        // Register WebSocket client for streaming updates
+        if (nlpService.registerStreamingClient) {
+          nlpService.registerStreamingClient(data.conversationId, ws);
+        }
+
+        ws.send(JSON.stringify({
+          type: 'subscription_confirmed',
+          subscription: 'nlp_parsing',
+          conversationId: data.conversationId
         }));
       }
 

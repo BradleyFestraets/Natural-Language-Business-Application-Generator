@@ -45,6 +45,8 @@ export interface RefinedRequirements extends ExtractedBusinessData {
 export class ClarificationService {
   private openai: OpenAI;
   private activeSessions: Map<string, ClarificationSession> = new Map();
+  private sessionHistory: Map<string, Array<{ question: string; response: string; timestamp: Date }>> = new Map();
+  private confidenceTracking: Map<string, number[]> = new Map();
 
   constructor() {
     if (process.env.OPENAI_API_KEY) {
@@ -57,7 +59,7 @@ export class ClarificationService {
   }
 
   /**
-   * Generate clarification questions for incomplete requirements
+   * Generate clarification questions for incomplete requirements with intelligent analysis
    */
   async generateClarificationQuestions(
     businessRequirementId: string,
@@ -72,11 +74,15 @@ export class ClarificationService {
     const analysisPrompt = this.buildAnalysisPrompt(extractedData, originalDescription);
 
     try {
+      // Analyze gaps and generate intelligent questions
+      const gapAnalysis = await this.analyzeRequirementGaps(extractedData);
+      
       const response = await this.openai.chat.completions.create({
         model: "gpt-4o",
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: analysisPrompt }
+          { role: "user", content: analysisPrompt },
+          { role: "assistant", content: `Gap Analysis: ${JSON.stringify(gapAnalysis)}` }
         ],
         functions: [this.getClarificationFunctionSchema()],
         function_call: { name: "generate_clarification_questions" },
@@ -336,8 +342,26 @@ Focus on generating:
 2. Questions that consider business domain and process complexity
 3. Questions with helpful examples and suggestions
 4. Questions that can be answered in <3 total questions
+5. Questions that improve confidence from ${this.getConfidenceThreshold()}% to 90%+
 
-Prioritize the most critical missing information that would impact application generation.`;
+Intelligent Questioning Strategy:
+- Identify the MOST CRITICAL missing information first
+- Consider dependencies between requirements
+- Focus on implementation-blocking gaps
+- Provide domain-specific examples
+- Suggest common patterns in the industry
+- Validate contradictions and ambiguities
+
+Prioritize questions that:
+- Clarify business rules and logic
+- Define data validation requirements
+- Specify integration details
+- Confirm approval workflows
+- Establish security and compliance needs`;
+  }
+
+  private getConfidenceThreshold(): number {
+    return 60; // Minimum confidence threshold
   }
 
   private buildAnalysisPrompt(extractedData: ExtractedBusinessData, originalDescription: string): string {
@@ -614,5 +638,46 @@ Generate enhanced requirements that integrate the clarification responses to imp
         required: ["businessContext", "processes", "forms", "approvals", "integrations", "workflowPatterns", "riskAssessment", "resourceRequirements", "confidence"]
       }
     };
+  }
+
+  /**
+   * Prioritize questions based on criticality and impact
+   */
+  private prioritizeQuestions(questions: ClarificationQuestion[]): ClarificationQuestion[] {
+    return questions.sort((a, b) => {
+      // Required questions first
+      if (a.required !== b.required) {
+        return a.required ? -1 : 1;
+      }
+      
+      // Then by type priority
+      const typePriority = {
+        'gap_filling': 1,
+        'validation': 2,
+        'disambiguation': 3,
+        'enhancement': 4
+      };
+      
+      const aPriority = typePriority[a.type] || 5;
+      const bPriority = typePriority[b.type] || 5;
+      
+      if (aPriority !== bPriority) {
+        return aPriority - bPriority;
+      }
+      
+      // Then by category priority
+      const categoryPriority = {
+        'business_rules': 1,
+        'approvals': 2,
+        'workflow': 3,
+        'forms': 4,
+        'integrations': 5
+      };
+      
+      const aCatPriority = categoryPriority[a.category] || 6;
+      const bCatPriority = categoryPriority[b.category] || 6;
+      
+      return aCatPriority - bCatPriority;
+    });
   }
 }

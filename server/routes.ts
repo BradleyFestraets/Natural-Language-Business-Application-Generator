@@ -116,6 +116,270 @@ export async function registerRoutes(
   const computerUseService = new ComputerUseService();
   const imageVideoService = new ImageVideoGenerationService();
 
+  // ===== NLP ENDPOINTS =====
+  
+  // Parse business description with streaming support
+  app.post("/api/nlp/parse-business-description", isAuthenticated, requireOrganization(), checkAIServiceMiddleware, async (req: Request, res: Response) => {
+    const authReq = req as AuthorizedRequest;
+    try {
+      const validation = parseBusinessDescriptionSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          message: "Invalid request", 
+          errors: validation.error.errors 
+        });
+      }
+
+      const { description, conversationId, context } = validation.data;
+      const userId = authReq.user.claims.sub;
+      const organizationId = authReq.organizationId;
+
+      // Parse the business description
+      const extractedData = await nlpService.parseBusinessDescription(description, {
+        conversationHistory: context?.history,
+        preserveContext: context?.preserveContext,
+        allowFallback: true
+      });
+
+      // Save the business requirement
+      const requirement: InsertBusinessRequirement = {
+        userId,
+        organizationId,
+        originalDescription: description,
+        extractedEntities: extractedData as any,
+        workflowPatterns: extractedData.workflowPatterns || [],
+        confidence: extractedData.confidence || 0.5,
+        status: 'validated'
+      };
+
+      const savedRequirement = await storage.createBusinessRequirement(requirement);
+      res.json(savedRequirement);
+    } catch (error) {
+      console.error("Error parsing business description:", error);
+      res.status(500).json({ 
+        message: "Failed to parse business description", 
+        error: error.message 
+      });
+    }
+  });
+
+  // Validate business description
+  app.post("/api/nlp/validate-description", checkAIServiceMiddleware, async (req: Request, res: Response) => {
+    try {
+      const validation = validateDescriptionSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          message: "Invalid request", 
+          errors: validation.error.errors 
+        });
+      }
+
+      const { description } = validation.data;
+      const validationResult = await nlpService.validateBusinessDescription(description, {
+        includeRecommendations: true,
+        checkCompleteness: true
+      });
+
+      res.json(validationResult);
+    } catch (error) {
+      console.error("Error validating description:", error);
+      res.status(500).json({ 
+        message: "Failed to validate description", 
+        error: error.message 
+      });
+    }
+  });
+
+  // Get auto-completion suggestions
+  app.post("/api/nlp/auto-complete", async (req: Request, res: Response) => {
+    try {
+      const { partialDescription, context } = req.body;
+      
+      if (!partialDescription || partialDescription.length < 5) {
+        return res.json({ suggestions: [] });
+      }
+
+      // Get suggestions from common business scenarios
+      const suggestions = await nlpService.getAutoCompleteSuggestions(partialDescription, {
+        context,
+        maxSuggestions: 5
+      });
+
+      res.json({ suggestions });
+    } catch (error) {
+      console.error("Error getting auto-complete suggestions:", error);
+      res.json({ suggestions: [] }); // Return empty suggestions on error
+    }
+  });
+
+  // Extract comprehensive business requirements with advanced analysis
+  app.post("/api/nlp/extract-requirements", isAuthenticated, requireOrganization(), checkAIServiceMiddleware, async (req: Request, res: Response) => {
+    const authReq = req as AuthorizedRequest;
+    try {
+      const { description, context, enableAdvancedAnalysis } = req.body;
+      
+      if (!description || description.trim().length < 10) {
+        return res.status(400).json({ 
+          message: "Description must be at least 10 characters" 
+        });
+      }
+
+      // Extract comprehensive requirements using advanced NLP
+      const extractedData = await nlpService.extractRequirements(description, {
+        context,
+        enableAdvancedAnalysis: enableAdvancedAnalysis !== false
+      });
+
+      // Store the extracted requirements in the database
+      const businessRequirement = await storage.createBusinessRequirement({
+        userId: authReq.user.claims.sub,
+        organizationId: authReq.organizationId,
+        originalDescription: description,
+        extractedEntities: {
+          businessContext: extractedData.businessContext,
+          processes: extractedData.processes,
+          forms: extractedData.forms,
+          approvals: extractedData.approvals,
+          integrations: extractedData.integrations,
+          workflowPatterns: extractedData.workflowPatterns,
+          riskAssessment: extractedData.riskAssessment,
+          resourceRequirements: extractedData.resourceRequirements
+        },
+        workflowPatterns: extractedData.workflowPatterns,
+        confidence: extractedData.confidence,
+        status: "validated"
+      });
+
+      res.json({
+        requirementId: businessRequirement.id,
+        extractedData,
+        confidence: extractedData.confidence,
+        recommendations: extractedData.recommendations
+      });
+    } catch (error) {
+      console.error("Error extracting requirements:", error);
+      res.status(500).json({ 
+        message: "Failed to extract requirements", 
+        error: error.message 
+      });
+    }
+  });
+
+  // Extract workflow patterns from description
+  app.post("/api/nlp/extract-workflow-patterns", checkAIServiceMiddleware, async (req: Request, res: Response) => {
+    try {
+      const { description } = req.body;
+      
+      if (!description || description.trim().length < 10) {
+        return res.status(400).json({ 
+          message: "Description must be at least 10 characters" 
+        });
+      }
+
+      const patterns = await nlpService.extractWorkflowPatterns(description);
+      
+      res.json({ patterns });
+    } catch (error) {
+      console.error("Error extracting workflow patterns:", error);
+      res.status(500).json({ 
+        message: "Failed to extract workflow patterns", 
+        error: error.message 
+      });
+    }
+  });
+
+  // Infer form fields from description
+  app.post("/api/nlp/infer-form-fields", checkAIServiceMiddleware, async (req: Request, res: Response) => {
+    try {
+      const { description } = req.body;
+      
+      if (!description || description.trim().length < 10) {
+        return res.status(400).json({ 
+          message: "Description must be at least 10 characters" 
+        });
+      }
+
+      const fields = await nlpService.inferFormFields(description);
+      
+      res.json({ fields });
+    } catch (error) {
+      console.error("Error inferring form fields:", error);
+      res.status(500).json({ 
+        message: "Failed to infer form fields", 
+        error: error.message 
+      });
+    }
+  });
+
+  // Extract approval chains from description
+  app.post("/api/nlp/extract-approval-chains", checkAIServiceMiddleware, async (req: Request, res: Response) => {
+    try {
+      const { description } = req.body;
+      
+      if (!description || description.trim().length < 10) {
+        return res.status(400).json({ 
+          message: "Description must be at least 10 characters" 
+        });
+      }
+
+      const chains = await nlpService.extractApprovalChains(description);
+      
+      res.json({ chains });
+    } catch (error) {
+      console.error("Error extracting approval chains:", error);
+      res.status(500).json({ 
+        message: "Failed to extract approval chains", 
+        error: error.message 
+      });
+    }
+  });
+
+  // Identify integration requirements
+  app.post("/api/nlp/identify-integrations", checkAIServiceMiddleware, async (req: Request, res: Response) => {
+    try {
+      const { description } = req.body;
+      
+      if (!description || description.trim().length < 10) {
+        return res.status(400).json({ 
+          message: "Description must be at least 10 characters" 
+        });
+      }
+
+      const integrations = await nlpService.identifyIntegrationRequirements(description);
+      
+      res.json({ integrations });
+    } catch (error) {
+      console.error("Error identifying integrations:", error);
+      res.status(500).json({ 
+        message: "Failed to identify integrations", 
+        error: error.message 
+      });
+    }
+  });
+
+  // Get conversation history
+  app.get("/api/nlp/conversation/:conversationId", isAuthenticated, requireOrganization(), async (req: Request, res: Response) => {
+    const authReq = req as AuthorizedRequest;
+    try {
+      const { conversationId } = req.params;
+      const userId = authReq.user.claims.sub;
+
+      // Get conversation history from storage (would need to implement conversation storage)
+      const requirements = await storage.listBusinessRequirements(userId);
+      const conversation = requirements.filter(r => 
+        r.id === conversationId || r.originalDescription.includes(conversationId)
+      );
+
+      res.json({ conversation });
+    } catch (error) {
+      console.error("Error getting conversation history:", error);
+      res.status(500).json({ 
+        message: "Failed to get conversation history", 
+        error: error.message 
+      });
+    }
+  });
+
   // ===== WORKFLOW MANAGEMENT ENDPOINTS =====
 
   // Get all available workflow patterns  
@@ -1188,6 +1452,88 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error getting clarification session:", error);
       res.status(500).json({ message: "Internal server error getting session status" });
+    }
+  });
+
+  // Get clarification suggestions for current session
+  app.get("/api/nlp/clarification/suggestions/:sessionId", isAuthenticated, async (req: any, res: Response) => {
+    try {
+      const { sessionId } = req.params;
+      const suggestions = await clarificationService.getClarificationSuggestions(sessionId);
+      res.json(suggestions);
+    } catch (error) {
+      console.error("Failed to fetch suggestions:", error);
+      res.status(500).json({ message: "Failed to fetch suggestions" });
+    }
+  });
+
+  // Get clarification history for a requirement
+  app.get("/api/nlp/clarification/history/:businessRequirementId", isAuthenticated, async (req: any, res: Response) => {
+    try {
+      const { businessRequirementId } = req.params;
+      const history = clarificationService.getClarificationHistory(businessRequirementId);
+      res.json(history);
+    } catch (error) {
+      console.error("Failed to fetch clarification history:", error);
+      res.status(500).json({ message: "Failed to fetch history" });
+    }
+  });
+
+  // Validate response consistency
+  app.post("/api/nlp/clarification/validate", isAuthenticated, requireAIServiceMiddleware, async (req: any, res: Response) => {
+    try {
+      const { questionId, response, context } = req.body;
+      
+      if (!questionId || !response) {
+        return res.status(400).json({ message: "Question ID and response are required" });
+      }
+      
+      const validation = await clarificationService.validateResponse(questionId, response, context);
+      res.json(validation);
+    } catch (error) {
+      console.error("Failed to validate response:", error);
+      res.status(500).json({ message: "Failed to validate response" });
+    }
+  });
+
+  // Abandon clarification session
+  app.post("/api/nlp/clarification/abandon/:sessionId", isAuthenticated, async (req: any, res: Response) => {
+    try {
+      const { sessionId } = req.params;
+      clarificationService.abandonSession(sessionId);
+      res.json({ message: "Session abandoned", sessionId });
+    } catch (error) {
+      console.error("Failed to abandon session:", error);
+      res.status(500).json({ message: "Failed to abandon session" });
+    }
+  });
+
+  // Get confidence tracking for a requirement
+  app.get("/api/nlp/requirements/:id/confidence", isAuthenticated, async (req: any, res: Response) => {
+    try {
+      const { id } = req.params;
+      const requirement = await storage.getBusinessRequirement(id);
+      
+      if (!requirement) {
+        return res.status(404).json({ message: "Requirement not found" });
+      }
+      
+      // Calculate confidence improvement from clarification
+      const history = clarificationService.getClarificationHistory(id);
+      let confidenceBoost = 0;
+      if (history.length > 0) {
+        confidenceBoost = Math.min(0.3, history.length * 0.05);
+      }
+      
+      res.json({
+        baseConfidence: requirement.confidence,
+        currentConfidence: Math.min(1, requirement.confidence + confidenceBoost),
+        confidenceImprovement: confidenceBoost,
+        requiresMoreClarification: requirement.confidence + confidenceBoost < 0.8
+      });
+    } catch (error) {
+      console.error("Failed to fetch confidence tracking:", error);
+      res.status(500).json({ message: "Failed to fetch confidence" });
     }
   });
 
