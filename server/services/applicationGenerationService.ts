@@ -3069,27 +3069,28 @@ Create dynamic customer segments using rule-based conditions:
           export default analyticsService;
           `;
 
-          analytics["analyticsComponents.tsx"] = `import React, { useState, useEffect } from 'react';
-          import { Button } from '@/components/ui/button';
-          import { Input } from '@/components/ui/input';
-          import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-          import { Badge } from '@/components/ui/badge';
-          import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-          import {
-            BarChart3,
-            TrendingUp,
-            Brain,
-            Search,
-            Plus,
-            Download,
-            RefreshCw,
-            Target,
-            DollarSign,
-            Users,
-            Activity,
-            AlertTriangle,
-            CheckCircle
-          } from 'lucide-react';
+                    analytics["analyticsComponents.tsx"] = `import React, { useState, useEffect } from 'react';
+                    import { Button } from '@/components/ui/button';
+                    import { Input } from '@/components/ui/input';
+                    import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+                    import { Badge } from '@/components/ui/badge';
+                    import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+                    import {
+                      BarChart3,
+                      TrendingUp,
+                      Brain,
+                      Search,
+                      Plus,
+                      Download,
+                      RefreshCw,
+                      Target,
+                      DollarSign,
+                      Users,
+                      Activity,
+                      AlertTriangle,
+                      CheckCircle
+                    } from 'lucide-react';
+                    import { colors, spacing, borderRadius, shadows, components } from '@/lib/design-tokens';
 
           interface BusinessMetric {
             id: string;
