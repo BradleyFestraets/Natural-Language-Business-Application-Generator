@@ -2872,6 +2872,176 @@ export async function registerRoutes(
     }
   });
 
+  // ===== CRM Endpoints =====
+  // Customer Relationship Management endpoints
+  app.post("/api/crm/customers", async (req, res) => {
+    try {
+      const customerData = req.body;
+
+      if (!customerData.personalInfo?.email) {
+        return res.status(400).json({ error: "Customer email is required" });
+      }
+
+      const customer = await crmService.createCustomer(customerData);
+
+      res.json(customer);
+    } catch (error) {
+      console.error("Create customer error:", error);
+      res.status(500).json({
+        error: "Failed to create customer",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.get("/api/crm/customers/:customerId", async (req, res) => {
+    try {
+      const { customerId } = req.params;
+
+      const customer = await crmService.getCustomer(customerId);
+
+      res.json(customer);
+    } catch (error) {
+      console.error("Get customer error:", error);
+      res.status(500).json({
+        error: "Failed to get customer",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.put("/api/crm/customers/:customerId", async (req, res) => {
+    try {
+      const { customerId } = req.params;
+      const updates = req.body;
+
+      const customer = await crmService.updateCustomer(customerId, updates);
+
+      res.json(customer);
+    } catch (error) {
+      console.error("Update customer error:", error);
+      res.status(500).json({
+        error: "Failed to update customer",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.get("/api/crm/customers/search", async (req, res) => {
+    try {
+      const { query, status, type, healthScoreMin, healthScoreMax, page, limit } = req.query;
+
+      const searchRequest: any = {};
+
+      if (query) searchRequest.query = query;
+      if (status) searchRequest.filters = { ...searchRequest.filters, status: status.split(',') };
+      if (type) searchRequest.filters = { ...searchRequest.filters, type: type.split(',') };
+      if (healthScoreMin || healthScoreMax) {
+        searchRequest.filters = {
+          ...searchRequest.filters,
+          healthScore: {
+            min: parseInt(healthScoreMin as string) || 0,
+            max: parseInt(healthScoreMax as string) || 100
+          }
+        };
+      }
+
+      if (page) searchRequest.pagination = { page: parseInt(page as string), limit: parseInt(limit as string) || 20 };
+
+      const result = await crmService.searchCustomers(searchRequest);
+
+      res.json(result);
+    } catch (error) {
+      console.error("Search customers error:", error);
+      res.status(500).json({
+        error: "Failed to search customers",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.post("/api/crm/interactions", async (req, res) => {
+    try {
+      const interactionData = req.body;
+
+      if (!interactionData.customerId || !interactionData.type || !interactionData.title) {
+        return res.status(400).json({
+          error: "Missing required interaction fields: customerId, type, title"
+        });
+      }
+
+      const interaction = await crmService.recordInteraction(interactionData);
+
+      res.json(interaction);
+    } catch (error) {
+      console.error("Record interaction error:", error);
+      res.status(500).json({
+        error: "Failed to record interaction",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.get("/api/crm/customers/:customerId/insights", async (req, res) => {
+    try {
+      const { customerId } = req.params;
+
+      const insights = await crmService.getCustomerInsights(customerId);
+
+      res.json(insights);
+    } catch (error) {
+      console.error("Get customer insights error:", error);
+      res.status(500).json({
+        error: "Failed to get customer insights",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.post("/api/crm/segments/rules", async (req, res) => {
+    try {
+      const ruleData = req.body;
+
+      if (!ruleData.name || !ruleData.conditions) {
+        return res.status(400).json({
+          error: "Missing required rule fields: name, conditions"
+        });
+      }
+
+      const rule = await crmService.createSegmentationRule(ruleData);
+
+      res.json(rule);
+    } catch (error) {
+      console.error("Create segmentation rule error:", error);
+      res.status(500).json({
+        error: "Failed to create segmentation rule",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.post("/api/crm/segments/generate", async (req, res) => {
+    try {
+      const { ruleId } = req.body;
+
+      if (!ruleId) {
+        return res.status(400).json({
+          error: "Missing required field: ruleId"
+        });
+      }
+
+      const segment = await crmService.generateSegment(ruleId);
+
+      res.json(segment);
+    } catch (error) {
+      console.error("Generate segment error:", error);
+      res.status(500).json({
+        error: "Failed to generate segment",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
   return httpServer;
 }
 

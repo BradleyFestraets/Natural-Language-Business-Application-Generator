@@ -15,6 +15,7 @@ import { join } from "path";
 import { ImageVideoGenerationService } from "./imageVideoGenerationService";
 import { VoiceComponentGenerator } from "./voiceComponentGenerator";
 import { TelephonyService } from "./telephonyService";
+import { CRMService } from "./crmService";
 import { GenerationOrchestrator, GenerationStage, OrchestrationOptions } from "../orchestration/generationOrchestrator";
 
 export interface GenerationOptions {
@@ -24,6 +25,7 @@ export interface GenerationOptions {
   includeChatbots?: boolean;
   includeVoiceComponents?: boolean;
   includeTelephony?: boolean;
+  includeCRM?: boolean;
   deploymentTarget?: "replit" | "local";
   generateDocumentation?: boolean;
 }
@@ -47,6 +49,7 @@ export interface GeneratedCode {
   computerUse: { [filename: string]: string };
   voiceComponents: { [filename: string]: string };
   telephony: { [filename: string]: string };
+  crm: { [filename: string]: string };
   documentation: { [filename: string]: string };
   visualAssets?: any; // Placeholder for visual assets
 }
@@ -79,6 +82,7 @@ export class ApplicationGenerationService {
   private imageVideoService: ImageVideoGenerationService;
   private voiceComponentGenerator: VoiceComponentGenerator;
   private telephonyService: TelephonyService;
+  private crmService: CRMService;
   private orchestrator: GenerationOrchestrator;
 
   constructor() {
@@ -102,6 +106,7 @@ export class ApplicationGenerationService {
     this.imageVideoService = new ImageVideoGenerationService();
     this.voiceComponentGenerator = new VoiceComponentGenerator();
     this.telephonyService = new TelephonyService();
+    this.crmService = new CRMService();
     this.orchestrator = new GenerationOrchestrator();
     
     // Set up progress event listener from orchestrator
@@ -190,6 +195,7 @@ export class ApplicationGenerationService {
         includeChatbots: true,
         includeVoiceComponents: true,
         includeTelephony: true,
+        includeCRM: true,
         deploymentTarget: "replit" as const,
         generateDocumentation: true,
         ...options,
@@ -886,6 +892,418 @@ const conference = await telephonyService.createConference(
         }
       }
 
+      // Phase 7.7: Generate CRM components if requested
+      let crm: { [filename: string]: string } = {};
+      if (finalOptions.includeCRM) {
+        this.updateProgress(applicationId, {
+          stage: "integrating",
+          progress: 89,
+          message: "Generating CRM system...",
+          currentComponent: "Customer Relationship Management",
+          estimatedTimeRemaining: 145
+        });
+
+        try {
+          // Generate CRM configuration
+          crm["crmConfig.ts"] = `export const crmConfiguration = {
+  features: {
+    customerManagement: true,
+    interactionTracking: true,
+    healthScoring: true,
+    segmentation: true,
+    analytics: true,
+    integrations: true
+  },
+  settings: {
+    defaultHealthScore: 75,
+    healthUpdateInterval: 24 * 60 * 60 * 1000, // 24 hours
+    maxInteractionsPerPage: 50,
+    searchDebounceMs: 300
+  }
+};
+
+export interface CRMFeatures {
+  customerManagement: boolean;
+  interactionTracking: boolean;
+  healthScoring: boolean;
+  segmentation: boolean;
+  analytics: boolean;
+  integrations: boolean;
+}
+`;
+
+          crm["crmService.ts"] = `import { crmConfiguration } from './crmConfig';
+
+class CRMService {
+  private baseUrl: string;
+
+  constructor() {
+    this.baseUrl = process.env.API_BASE_URL || '/api';
+  }
+
+  async createCustomer(customerData: any) {
+    const response = await fetch(\`\${this.baseUrl}/crm/customers\`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(customerData)
+    });
+    return response.json();
+  }
+
+  async getCustomer(customerId: string) {
+    const response = await fetch(\`\${this.baseUrl}/crm/customers/\${customerId}\`);
+    return response.json();
+  }
+
+  async updateCustomer(customerId: string, updates: any) {
+    const response = await fetch(\`\${this.baseUrl}/crm/customers/\${customerId}\`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates)
+    });
+    return response.json();
+  }
+
+  async searchCustomers(query: any) {
+    const params = new URLSearchParams(query);
+    const response = await fetch(\`\${this.baseUrl}/crm/customers/search?\${params}\`);
+    return response.json();
+  }
+
+  async recordInteraction(interactionData: any) {
+    const response = await fetch(\`\${this.baseUrl}/crm/interactions\`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(interactionData)
+    });
+    return response.json();
+  }
+
+  async getCustomerInsights(customerId: string) {
+    const response = await fetch(\`\${this.baseUrl}/crm/customers/\${customerId}/insights\`);
+    return response.json();
+  }
+
+  async createSegmentationRule(ruleData: any) {
+    const response = await fetch(\`\${this.baseUrl}/crm/segments/rules\`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(ruleData)
+    });
+    return response.json();
+  }
+
+  async generateSegment(ruleId: string) {
+    const response = await fetch(\`\${this.baseUrl}/crm/segments/generate\`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ruleId })
+    });
+    return response.json();
+  }
+}
+
+export const crmService = new CRMService();
+export default crmService;
+`;
+
+          crm["crmComponents.tsx"] = `import React, { useState, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Search, Plus, Users, TrendingUp, AlertCircle, CheckCircle } from 'lucide-react';
+
+interface Customer {
+  id: string;
+  personalInfo: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    company?: string;
+  };
+  customerStatus: 'lead' | 'prospect' | 'customer' | 'churned';
+  customerHealth: {
+    score: number;
+    status: 'excellent' | 'good' | 'fair' | 'poor' | 'critical';
+  };
+  tags: string[];
+}
+
+interface CRMComponentsProps {
+  className?: string;
+}
+
+export function CRMComponents({ className = '' }: CRMComponentsProps) {
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    loadCustomers();
+  }, []);
+
+  const loadCustomers = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/crm/customers/search');
+      const data = await response.json();
+      setCustomers(data.customers || []);
+    } catch (error) {
+      console.error('Failed to load customers:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) {
+      loadCustomers();
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await fetch(\`/api/crm/customers/search?query=\${encodeURIComponent(searchQuery)}\`);
+      const data = await response.json();
+      setCustomers(data.customers || []);
+    } catch (error) {
+      console.error('Search failed:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getHealthColor = (score: number) => {
+    if (score >= 80) return 'text-green-600 bg-green-100';
+    if (score >= 60) return 'text-yellow-600 bg-yellow-100';
+    if (score >= 40) return 'text-orange-600 bg-orange-100';
+    return 'text-red-600 bg-red-100';
+  };
+
+  const getHealthIcon = (score: number) => {
+    if (score >= 80) return <CheckCircle className="h-4 w-4" />;
+    if (score >= 60) return <TrendingUp className="h-4 w-4" />;
+    return <AlertCircle className="h-4 w-4" />;
+  };
+
+  return (
+    <div className={\`space-y-6 \${className}\}>
+      <div className="flex gap-4">
+        <div className="flex-1">
+          <Input
+            placeholder="Search customers by name, email, or company..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+          />
+        </div>
+        <Button onClick={handleSearch} disabled={isLoading}>
+          <Search className="h-4 w-4 mr-2" />
+          {isLoading ? 'Searching...' : 'Search'}
+        </Button>
+        <Button>
+          <Plus className="h-4 w-4 mr-2" />
+          Add Customer
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {customers.map((customer) => (
+          <Card key={customer.id} className="hover:shadow-md transition-shadow">
+            <CardHeader className="pb-3">
+              <div className="flex justify-between items-start">
+                <CardTitle className="text-lg">
+                  {customer.personalInfo.firstName} {customer.personalInfo.lastName}
+                </CardTitle>
+                <Badge
+                  className={getHealthColor(customer.customerHealth.score)}
+                  variant="secondary"
+                >
+                  {getHealthIcon(customer.customerHealth.score)}
+                  <span className="ml-1">{customer.customerHealth.score}</span>
+                </Badge>
+              </div>
+              <CardDescription>
+                {customer.personalInfo.company && (
+                  <div className="font-medium">{customer.personalInfo.company}</div>
+                )}
+                <div className="text-sm text-muted-foreground">
+                  {customer.personalInfo.email}
+                </div>
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Status:</span>
+                  <Badge variant="outline" className="capitalize">
+                    {customer.customerStatus}
+                  </Badge>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Health:</span>
+                  <span className="capitalize font-medium">
+                    {customer.customerHealth.status}
+                  </span>
+                </div>
+                {customer.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {customer.tags.slice(0, 3).map((tag) => (
+                      <Badge key={tag} variant="secondary" className="text-xs">
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {customers.length === 0 && !isLoading && (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Users className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No customers found</h3>
+            <p className="text-muted-foreground text-center mb-4">
+              {searchQuery ? 'Try adjusting your search criteria' : 'Start by adding your first customer'}
+            </p>
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Customer
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+`;
+
+          crm["crmIntegration.md"] = \`# CRM System Integration Guide
+
+## Overview
+This application includes a comprehensive Customer Relationship Management (CRM) system that provides 360-degree customer views, health scoring, segmentation, and AI-powered insights.
+
+## Features
+- **Customer Management**: Complete customer database with profiles and custom fields
+- **360-Degree View**: Integrated customer timeline across applications, sales, marketing, and support
+- **Health Scoring**: AI-powered customer health assessment and risk prediction
+- **Segmentation**: Dynamic customer segmentation with rule-based and AI-powered classification
+- **Interaction Tracking**: Comprehensive customer interaction history and analytics
+- **Search & Filtering**: Advanced customer search with multi-criteria filtering and sorting
+
+## Configuration
+1. CRM is automatically integrated into generated applications
+2. Configure customer fields in \`crmConfig.ts\`
+3. Set up health scoring parameters based on business needs
+4. Define segmentation rules for targeted customer groups
+
+## Usage Examples
+
+### Creating a Customer
+\`\`\`tsx
+import { crmService } from './crmService';
+
+const newCustomer = await crmService.createCustomer({
+  personalInfo: {
+    firstName: 'John',
+    lastName: 'Doe',
+    email: 'john.doe@example.com',
+    company: 'Example Corp'
+  },
+  customerStatus: 'prospect',
+  customerType: 'business',
+  acquisitionSource: 'website'
+});
+\`\`\`
+
+### Searching Customers
+\`\`\`tsx
+const searchResults = await crmService.searchCustomers({
+  query: 'john',
+  filters: {
+    status: ['prospect', 'customer'],
+    healthScore: { min: 60, max: 100 }
+  },
+  sort: { field: 'createdAt', direction: 'desc' },
+  pagination: { page: 1, limit: 20 }
+});
+\`\`\`
+
+### Recording Customer Interactions
+\`\`\`tsx
+const interaction = await crmService.recordInteraction({
+  customerId: 'customer-id',
+  type: 'application_usage',
+  title: 'Logged into application',
+  description: 'User accessed the main dashboard',
+  systemSource: 'application'
+});
+\`\`\`
+
+## API Endpoints
+- \`POST /api/crm/customers\` - Create customer
+- \`GET /api/crm/customers/:id\` - Get customer with 360-degree view
+- \`PUT /api/crm/customers/:id\` - Update customer
+- \`GET /api/crm/customers/search\` - Search customers
+- \`POST /api/crm/interactions\` - Record interaction
+- \`GET /api/crm/customers/:id/insights\` - Get AI insights
+- \`POST /api/crm/segments/rules\` - Create segmentation rule
+- \`POST /api/crm/segments/generate\` - Generate segment
+
+## Customer Health Scoring
+The system automatically calculates customer health scores based on:
+- Application usage frequency and patterns
+- Support ticket history and resolution
+- Sales engagement and opportunity progression
+- Marketing interaction and response rates
+- Overall engagement trends and activity levels
+
+## Segmentation Rules
+Create dynamic customer segments using rule-based conditions:
+- Customer status and type filtering
+- Health score ranges
+- Custom field values
+- Tag-based categorization
+- Activity and engagement criteria
+
+## Security & Privacy
+- Customer data is isolated by organization
+- Role-based access control for customer information
+- Audit logging for all customer interactions
+- GDPR and privacy compliance built-in
+- Data encryption at rest and in transit
+
+## Performance Considerations
+- Optimized database queries for large customer datasets
+- Caching for frequently accessed customer information
+- Pagination for customer lists and search results
+- Background processing for health score updates
+- Efficient search indexing for fast customer lookups
+\`;
+
+          this.updateProgress(applicationId, {
+            stage: "integrating",
+            progress: 90,
+            message: "CRM system generated successfully",
+            estimatedTimeRemaining: 140
+          });
+
+        } catch (error) {
+          console.error("Failed to generate CRM components:", error);
+          this.updateProgress(applicationId, {
+            stage: "integrating",
+            progress: 90,
+            message: "CRM generation failed, continuing without CRM",
+            errors: [error instanceof Error ? error.message : "Unknown CRM error"],
+            estimatedTimeRemaining: 140
+          });
+        }
+      }
+
       // Phase 8: Generate integrations if requested
       let integrations: { [filename: string]: string } = {};
       if (finalOptions.includeIntegrations) {
@@ -895,7 +1313,7 @@ const conference = await telephonyService.createConference(
       this.updateProgress(applicationId, {
         stage: "integrating",
         progress: 89,
-        message: "Integrating components, workflows, chatbots, voice AI, and telephony...",
+        message: "Integrating components, workflows, chatbots, voice AI, telephony, and CRM...",
         estimatedTimeRemaining: 150
       });
 
@@ -923,6 +1341,7 @@ const conference = await telephonyService.createConference(
           computerUse,
           voiceComponents,
           telephony,
+          crm,
           documentation: {}
         });
       }
@@ -945,6 +1364,7 @@ const conference = await telephonyService.createConference(
         computerUse,
         voiceComponents,
         telephony,
+        crm,
         documentation
       });
 
