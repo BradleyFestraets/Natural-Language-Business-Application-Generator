@@ -11,6 +11,7 @@ import { replitAuthHandler, setupAuth } from "./replitAuth";
 import { storage } from "./storage";
 import { registerRoutes } from "./routes";
 import { registerWorkflowRoutes } from "./workflowRoutes";
+import { crmRouter } from "./routes/crmRoutes";
 import { getWorkflowExecutionEngine } from "./engines/workflowExecutionEngineInstance";
 
 const app = express();

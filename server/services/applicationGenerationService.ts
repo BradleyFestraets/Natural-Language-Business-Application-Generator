@@ -1212,7 +1212,7 @@ export function CRMComponents({ className = '' }: CRMComponentsProps) {
 }
 `;
 
-          crm["crmIntegration.md"] = \`# CRM System Integration Guide
+          crm["crmIntegration.md"] = `# CRM System Integration Guide
 
 ## Overview
 This application includes a comprehensive Customer Relationship Management (CRM) system that provides 360-degree customer views, health scoring, segmentation, and AI-powered insights.
